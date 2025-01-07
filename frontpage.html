@@ -7,8 +7,40 @@
   
   <script>
     Geni.init({
-      app_id: 'avRSGWx5oEjhAQEZIgD6xseV5LTm1NjL4Z7t4tp8'
+        app_id: 'avRSGWx5oEjhAQEZIgD6xseV5LTm1NjL4Z7t4tp8',
+        cookie: true,
+        logging: true,
     });
     console.log('Geni.init finished');
+
+    function connect() {
+        Geni.connect(function(response) {
+            
+            console.log('Geni.connect returned', response);
+            if (response.status == 'authorized') {
+                // User is logged in and has authorized your application.
+                // You can now make authorized calls to the API.
+            
+            } else {
+                // User is either logged out, has not authorized the app or both.
+            }
+        });
+    };
+    function fetchProfile() {
+        Geni.api('/profile', data => {
+            console.log(JSON.stringify(data, null, 2));
+        });
+    }
+    function fetchAncestors() {
+        console.log('Fetching ancestors');
+        Geni.api('/profile-3768075/ancestors', {generations: 2}, data => {
+            console.log(JSON.stringify(data, null, 2));
+        });
+    }
   </script>
+  <button onclick="connect()">Login</button>
+  <button onclick="fetchProfile()">Fetch profile</button>
+  <button onclick="fetchAncestors()">Fetch ancestors</button>
+  <br>
+  <a href="simulations/test_tree.html">Test tree</a>
 </body>

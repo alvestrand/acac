@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+<head>
+</head>
+<body>
+  <h1>Test tree</h1>
+  <script type="module" src="test_tree.js">
+  <script>
+    function testAction() {
+        console.log('Test action');
+    }
+  </script>
+  <script>
+    function buildTree() {
+        console.log('Build tree');
+    }
+  </script>
+  Starting population: <input id="starting_population" type="number" value="100">
+  <br/>
+  Number of generations: <input id="generations" type="number" value="4">
+  <br/>
+  Children per couple: <input id="child_count" type="number" value="3">
+  <br/>
+  <h2>Debug buttons</h2>
+  <button id="build-test-tree">Build test tree</button>
+  <button id="fill-in-ancestors">Fill in ancestors</button>
+  <button id="run-algorithm">Run detection algorithm</button>
+  <h2>Run a test</h2>
+  <button id="test-a-tree">Build and test a treee</button>
+  <br>
+  <span id="marked-folks"></span> people inherited the marker.
+  <span id="progenitor-candidates"></span> people are possible progenitors
+</body>
+</html>
