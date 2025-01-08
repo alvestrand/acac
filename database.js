@@ -36,6 +36,10 @@ class Person {
     this.markers = new Set();
   }
 
+  toJSON() {
+    return {id: this.#id, attributes: this.#personRecord, markers: this.markers};
+  }
+
   id() {
     return this.#id;
   }
@@ -98,9 +102,15 @@ class Database {
   get(id) {
     return this.#persons.get(id);
   }
-  // Represent the database as a JSON object.
-  toJson() {
-    return JSON.stringify(this.#persons, null, 2);
+  // Represent the database as a JSON string representation.
+  toJsonString() {
+    const obj = Object.fromEntries(this.#persons);
+    return JSON.stringify({persons: obj}, null, 2);
+  }
+  // Initialize the database from a string representing a JSON object
+  fromJsonString(data) {
+    const parsed = JSON.parse(data);
+    this.#persons = new Map(Object.entries(parsed.persons));
   }
   // For debugging: Return all records with a specific birth year
   getAllWithBirthYearAndGender(year, gender) {

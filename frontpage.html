@@ -2,7 +2,8 @@
 <head>
 </head>
 <body>
-<script src="https://geni.com/jsdk.js"></script>
+  <script src="https://geni.com/jsdk.js"></script>
+  <script src="localstoragedb.js" type="module"></script>
   <h1>This page should access Geni</h1>
   
   <script>
@@ -12,6 +13,10 @@
         logging: true,
     });
     console.log('Geni.init finished');
+    if (localStorage.getItem('TestData')) {
+        console.log('Have test data');
+    }
+    localStorage.setItem('TestData', 'an item');
 
     function connect() {
         Geni.connect(function(response) {
@@ -37,10 +42,49 @@
             console.log(JSON.stringify(data, null, 2));
         });
     }
+    function fetchUnion() {
+        console.log('Fetching union');
+        Geni.api('/union-19647660', {only_ids: true}, data => {
+            console.log(JSON.stringify(data, null, 2));
+        });
+    }
+  </script>
+  <script type='module'>
+    import { loadDatabase, saveDatabase, db } from './localstoragedb.js';
+
+    // Set up some handlers.
+    document.getElementById('load-database').addEventListener('click', () => { loadDatabase();
+                                                                               showDatabase()});
+    document.getElementById('save-database').addEventListener('click', () => { saveDatabase(); });
+    document.getElementById('show-database').addEventListener('click', () => { showDatabase(); });
+    document.getElementById('add-record').addEventListener('click', () => { addRecord(); });
+
+    function showDatabase() {
+        const display = document.getElementById('database-display');
+        console.log('show database');
+        display.innerText = db.toJsonString();
+    }
+
+    function addRecord() {
+        db.addWithAttributes('foo', {id: 'foo', name: 'foo name', sex: 'male'});
+        showDatabase();
+    }
+  </script>
+    
+        
   </script>
   <button onclick="connect()">Login</button>
   <button onclick="fetchProfile()">Fetch profile</button>
   <button onclick="fetchAncestors()">Fetch ancestors</button>
+  <button onclick="fetchUnion()">Fetch union</button>
+  <br>
+  <button id="load-database">Load database</button>
+  <button id="save-database">Save database</button>
+  <button id="show-database">Show database</button>
+  <button id="add-record">Add record</button>
   <br>
   <a href="simulations/test_tree.html">Test tree</a>
+  <pre>
+    <div id="database-display"></div>
+  </pre>
 </body>
