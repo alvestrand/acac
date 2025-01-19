@@ -37,7 +37,7 @@ class Person {
   }
 
   toJSON() {
-    return {id: this.#id, attributes: this.#personRecord, markers: this.markers};
+    return {id: this.#id, parents: this.parents, attributes: this.#personRecord, markers: this.markers};
   }
 
   id() {
@@ -51,6 +51,15 @@ class Person {
   }
   gender() {
     return this.#gender;
+  }
+  unions() {
+    return this.#personRecord.unions;
+  }
+  guid() {
+    return this.#personRecord.guid;
+  }
+  attribute(selector) {
+    return this.#personRecord[selector];
   }
   // Build the set of all ancestors from the supplied database.
   // If it's already built, do nothing.
@@ -94,10 +103,11 @@ class Database {
   }
   addPerson(person) {
     this.#persons.set(person.id(), person);
+    return person;
   }
   addWithAttributes(id, attributes) {
     let newPerson = new Person(id, attributes);
-    this.addPerson(newPerson);
+    return this.addPerson(newPerson);
   }
   get(id) {
     return this.#persons.get(id);
@@ -110,7 +120,9 @@ class Database {
   // Initialize the database from a string representing a JSON object
   fromJsonString(data) {
     const parsed = JSON.parse(data);
-    this.#persons = new Map(Object.entries(parsed.persons));
+    for (const key in parsed.persons) {
+      this.addWithAttributes(key, parsed.persons[key].attributes);
+    }
   }
   // For debugging: Return all records with a specific birth year
   getAllWithBirthYearAndGender(year, gender) {

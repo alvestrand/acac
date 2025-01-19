@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+</head>
+<body>
+  <script src="https://geni.com/jsdk.js"></script>
+  <script src="localstoragedb.js" type="module"></script>
+  <script src="index.js" type="module"></script>
+  <h1>All Common Ancestors Considered</h1>
+  <p>
+  To use this page:<br/>
+  Enter a name for the DNA match group you're working on in the "name" box.
+  Enter an URL or a GUID of a Geni profile in the "add" box.
+  <p>
+    The list of currently considered profiles will appear below the "add" box.
+    To the right, there will be a list of groups, each of which shares a set
+    of common ancestors.
+    <br/>
+    As you add profiles, the groups on the right may split or divide, and
+    their lists of common ancestors may shrink.
+    <br/>
+    The hope is that as you add more matching profiles, the groups will
+    converge on a single set of ancestors that can be taken as "the source
+    for that segment".
+    <br/>
+    The data is stored in "local storage" in your browser, so it should be
+    recoverable after exiting the browser and restarting.
+  </p>
+  <button id="save-database">Save database</button>
+  <table>
+    <tr>
+      <td>
+        <p>
+          Group name:<input type="text" id="group-name"></input>
+          </p>
+        <p>
+          Add profile:<input type="text" id="add-profile"
+                             value="6000000003987799076"></input>
+          <button id="add-profile-now">Add!</button>
+        </p>
+        <div id="add-profile-message"></div>
+        <h2>Currently fetched profiles</h2>
+        <p>
+          <div id="profile-list">
+          </div>
+        </p>
+      </td>
+      <td>
+        Queue size: <span id="queue-size">
+        </span>
+        <div id="group-list">
+        </div>
+      </td>
+    </tr>
+  </table>
+  
+</body>
+</html>
