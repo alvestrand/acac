@@ -3,6 +3,7 @@
 // It assumes that the Geni API is available in the global environment (todo: inject it)
 
 export { GeniClient };
+import { urlToId } from './geni_structures.js';
 
 class GeniOperation {
 
@@ -22,14 +23,12 @@ class GeniOperation {
       // Geni modifies the args argument, so clone it.
       const args = structuredClone(this.args);
       Geni.api(this.operation, args, data => {
-        console.log('operation returned', data);
         if (data.error) {
           if (data.error.type == 'ApiException'
               && data.error.message == 'Rate limit exceeded.') {
-            console.log('Rate limited');
             // Not fulfilled, will be retried in next round
           } else {
-            console.log('Operation failed');
+            console.log('Operation failed with error', data.error);
             this.fulfilled = true;
             this.reject(data.error);
           }
@@ -37,15 +36,13 @@ class GeniOperation {
           this.fulfilled = true;
           this.resolve(data);
         }
+        this.active = false;
       });
     }
     catch (error) {
       console.log('Operation threw an error');
       this.fulfilled = true;
       this.reject(error);
-    }
-    finally {
-      this.active = false;
     }
   }
 }
@@ -57,30 +54,25 @@ class GeniClient {
     this.connected = false;
     this.#operationQueue = [];
     this.queueSizeView = number => {};
-     Geni.init({
-        app_id: appId,
-        cookie: true,
-        logging: true,
-     });
+    Geni.init({
+      app_id: appId,
+      cookie: true,
+      logging: false,
+    });
   }
 
   runOperations() {
     if (this.#operationQueue.length > 0) {
-      console.log('Op queue length is ', this.#operationQueue.length);
       const op = this.#operationQueue[0];
       // Operations get fulfilled asynchronously.
       if (op.fulfilled) {
-        console.log('Op finished');
         this.#operationQueue.shift();
         if (this.#operationQueue.length > 0) {
-          console.log('Next op executing');
           this.#operationQueue[0].execute();
         }
       } else if (op.active) {
         // return later
-        console.log('Op active');
       } else {
-        console.log('Op executing');
         op.execute();
       }
       setTimeout(this.runOperations.bind(this), 5000);
@@ -90,15 +82,19 @@ class GeniClient {
 
   async connect() {
     return new Promise((resolve, reject) => {
-      Geni.connect(response => {
-        if (response.status == 'authorized') {
-          console.log('Geni connected');
-          this.connected = true;
-          resolve();
-        } else {
-          reject('Connect failed, status is ' + response.status);
-        }
-      });
+      if (this.connected) {
+        resolve();
+      } else {
+        Geni.connect(response => {
+          if (response.status == 'authorized') {
+            console.log('Geni connected');
+            this.connected = true;
+            resolve();
+          } else {
+            reject('Connect failed, status is ' + response.status);
+          }
+        });
+      }
     });
   }
 
@@ -113,7 +109,7 @@ class GeniClient {
 
   async getPersonByUrl(url) {
     return new Promise((resolve, reject) => {
-      const urlOp = url.replace('https://www.geni.com.api/', '');
+      const urlOp = urlToId(url);
       const op = new GeniOperation(urlOp, [], resolve, reject);
       this.#operationQueue.push(op);
       this.runOperations();

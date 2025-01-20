@@ -37,7 +37,12 @@ class Person {
   }
 
   toJSON() {
-    return {id: this.#id, parents: this.parents, attributes: this.#personRecord, markers: this.markers};
+    return {
+      id: this.#id,
+      parents: this.parents,
+      attributes: this.#personRecord,
+      markers: this.markers
+    };
   }
 
   id() {
@@ -61,6 +66,20 @@ class Person {
   attribute(selector) {
     return this.#personRecord[selector];
   }
+  father() {
+    return this.#father;
+  }
+  mother() {
+    return this.#mother;
+  }
+  setFather(father) {
+    this.#father = father;
+    this.#personRecord.father = father;
+  }
+  setMother(mother) {
+    this.#mother = mother;
+    this.#personRecord.mother = mother;
+  }
   // Build the set of all ancestors from the supplied database.
   // If it's already built, do nothing.
   addAncestors(db) {
@@ -68,10 +87,10 @@ class Person {
       let father = db.get(this.#father);
       let mother = db.get(this.#mother);
       if (father) {
-        father.addAncestors();
+        father.addAncestors(db);
       }
       if (mother) {
-        mother.addAncestors();
+        mother.addAncestors(db);
       }
       this.#ancestors = new Set();
       if (father) {
@@ -92,8 +111,10 @@ class Person {
 class Database {
   // Person records. map of id -> Person.
   #persons;
+  #idAttributeToGuidMap;
   constructor() {
     this.#persons = new Map();
+    this.#idAttributeToGuidMap = new Map();
   }
   size() {
     return this.#persons.size;
@@ -103,6 +124,8 @@ class Database {
   }
   addPerson(person) {
     this.#persons.set(person.id(), person);
+    this.#idAttributeToGuidMap.set(person.attribute('id'),
+                                   person.id());
     return person;
   }
   addWithAttributes(id, attributes) {
@@ -111,6 +134,13 @@ class Database {
   }
   get(id) {
     return this.#persons.get(id);
+  }
+  getByIdAttribute(idAttribute) {
+    const guid = this.#idAttributeToGuidMap.get(idAttribute);
+    if (guid) {
+      return this.get(guid);
+    }
+    return undefined;
   }
   // Represent the database as a JSON string representation.
   toJsonString() {
@@ -121,7 +151,11 @@ class Database {
   fromJsonString(data) {
     const parsed = JSON.parse(data);
     for (const key in parsed.persons) {
-      this.addWithAttributes(key, parsed.persons[key].attributes);
+      const entry = this.addWithAttributes(key, parsed.persons[key].attributes);
+      // Special: restore the "parents" attribute
+      if ('parents' in parsed.persons[key]) {
+        entry.parents = parsed.persons[key].parents;
+      }
     }
   }
   // For debugging: Return all records with a specific birth year

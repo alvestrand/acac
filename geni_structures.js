@@ -1,11 +1,19 @@
 // This file contains functions that require understanding of the way
 // Geni structures data, but do not
 
-export { resolveParents }
+export { urlToId, idToUrl, resolveParents }
+
+function urlToId(url) {
+  return url.replace('https://www.geni.com/api/', '');
+}
+
+function idToUrl(id) {
+  return 'https://www.geni.com/api/' + id;
+}
 
 function resolveParents(profile, unionList) {
   const id = profile.attribute('id');
-  const idAsUrl = 'https://www.geni.com/api/' + id;
+  const idAsUrl = idToUrl(id);
   for (const union of unionList) {
     let isChild = false;
     let isAdopted = false;
