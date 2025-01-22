@@ -25,8 +25,9 @@ class Person {
       if ('mother' in attributes) {
         this.#mother = attributes.mother;
       }
-      if ('birth' in attributes) {
-        this.#birthYear = attributes.birth;
+      if ('birth' in attributes && 'date' in attributes.birth
+         && 'year' in attributes.birth.date) {
+        this.#birthYear = attributes.birth.date.year;
       }
       if ('gender' in attributes) {
         this.#gender = attributes.gender;
@@ -83,7 +84,7 @@ class Person {
   // Build the set of all ancestors from the supplied database.
   // If it's already built, do nothing.
   addAncestors(db) {
-    if (!this.#ancestors) {
+    if (!this.#ancestors || this.#ancestors === undefined) {
       let father = db.get(this.#father);
       let mother = db.get(this.#mother);
       if (father) {
@@ -104,6 +105,9 @@ class Person {
     }
   }
   ancestors() {
+    if (this.#ancestors === undefined) {
+      return new Set();
+    }
     return this.#ancestors;
   }
 }

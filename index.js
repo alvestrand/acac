@@ -2,6 +2,12 @@ import { Person, Database } from './database.js';
 import { GeniClient } from './async_geni.js';
 import { urlToId, resolveParents } from './geni_structures.js';
 import { loadDatabase, saveDatabase, db } from './localstoragedb.js';
+import {
+  CommonAncestorGroup,
+  mergeWithSomeGroup,
+  makeGroupList,
+  removeInnerParents
+} from './ancestor_finder.js';
 
 // Pick up the Geni application id
 let geniAppId;
@@ -24,6 +30,7 @@ client.queueSizeView = number => {
 }
 
 let profileList = [];
+let ancestorGroups = [];
 
 // Utility functions
 function isolateId(url) {
@@ -42,38 +49,42 @@ const queueSizeElement = document.getElementById('queue-size');
 const saveDatabaseButton = document.getElementById('save-database');
 const buildTreeButton = document.getElementById('build-tree');
 const yearLimitElement = document.getElementById('year-limit');
+const recalculateGroupsButton = document.getElementById('recalculate-groups');
+const groupListElement = document.getElementById('group-list');
 
-// Initialize the page from last saved state
-loadDatabase();
-console.log('Database size', db.size());
-groupNameElement.value = localStorage.getItem('currentSet');
-let groupName = 'profileSet-' + groupNameElement.value;
-let profileListString = localStorage.getItem(groupName);
-if (profileListString) {
-  profileList = JSON.parse(profileListString);
+function loadProfileList() {
+  let groupName = 'profileSet-' + groupNameElement.value;
+  let profileListString = localStorage.getItem(groupName);
+  if (profileListString) {
+    const profileIdName = JSON.parse(profileListString);
+    profileList = profileIdName.map(entry => db.get(entry.id));
+  } else {
+    profileList = new Array();
+  }
   displayProfileList();
 }
 
 function displayProfileList() {
   profileListElement.innerHTML = '';
   profileList.forEach(profile => {
-    const {id, name} = profile;
-    console.log(id, name);
     const p = document.createElement('p');
-    p.textContent = `${id} ${name}`;
+    p.textContent = `${profile.id()} ${profile.name()} ${profile.ancestors().size}`;
     profileListElement.append(p);
   });
 }
 
 function addNameToProfileList(person) {
-  if (profileList.find(entry => entry.id == person.guid())) {
+  if (profileList.find(entry => entry.guid() == person.guid())) {
     console.log('Profile already in list');
+    return false;
   } else {
-    profileList.push({id: person.guid(), name: person.name()});
+    profileList.push(person);
     displayProfileList();
+    return true;
   }
 }
 
+let profileBeingFetched;
 
 async function addProfile() {
   try {
@@ -81,15 +92,27 @@ async function addProfile() {
       await client.connect();
     }
     const guid = isolateId(addProfileElement.value);
+    if (guid === profileBeingFetched) {
+      console.log('addProfile called twice on', guid, ', ignoring');
+      return;
+    }
+    addProfileMessage.innerText = 'Fetching id ' + guid;
+    profileBeingFetched = guid;
     const stored = db.get(guid);
     if (stored) {
       console.log('guid ', guid, ' already in DB');
       addProfileMessage.innerText = stored.name() + ' already in DB';
-      addNameToProfileList(stored);
-      addProfileElement.value = '';
-      if (!('parents' in stored)) {
-        console.log('Getting parents of stored profile', stored.guid());
-        await addParents(stored);
+      if (addNameToProfileList(stored)) {
+        addProfileElement.value = '';
+        if (!('parents' in stored)) {
+          console.log('Getting parents of stored profile', stored.guid());
+          await addParents(stored);
+        }
+        console.log('Building tree for added person', person.name());
+        addProfileMessage.innerText = 'Building tree for ' + person.name();
+        await buildTreeForPerson(person, 2025, Number(yearLimitElement.value));
+        buildAncestorGroups();
+        addProfileMessage.innerText = 'Finished tree building for ' + person.name();
       }
       return;
     }
@@ -103,7 +126,12 @@ async function addProfile() {
     const person = db.addWithAttributes(fetched.guid, fetched);
     addNameToProfileList(person);
     addProfileElement.value = '';
-    addParents(person);
+    await addParents(person);
+    console.log('Building tree for added person', person.name());
+    addProfileMessage.innerText = 'Building tree for ' + person.name();
+    await buildTreeForPerson(person, 2025, Number(yearLimitElement.value));
+    buildAncestorGroups();
+    addProfileMessage.innerText = 'Finished tree building for ' + person.name();
   } catch (error) {
     console.log('Add failed, message ', error);
     addProfileMessage.innerText = 'Add failed, error ' + JSON.stringify(error);
@@ -139,6 +167,9 @@ async function addParents(person) {
     console.log('No unions on ', person.id(), person.name());
     return;
   }
+  if (person.parents && person.parents !== undefined) {
+    console.log('Already have parents on', person.name());
+  }
   // Trigger fetching of parents.
   console.log('Fetching unions');
   const strippedUnions = person.unions().map(str => {
@@ -150,6 +181,10 @@ async function addParents(person) {
     if ('results' in result) {
       unions = result.results;
       console.log('Unions fetched:', unions);
+    } else if ('id' in result) {
+      // When a single result is returned, it's returned
+      // without a containing "results" array.
+      unions = [ result ];
     } else {
       console.log('No results in result', result);
       addProfileMessage.innerText = 'Finding unions gave empty result';
@@ -169,10 +204,6 @@ async function addParents(person) {
 let building = false;
 
 async function buildTreeForPerson(person, birthYearAssumption, yearLimit) {
-  if (!building) {
-    console.log('Build stopped, not building for', person.name());
-    return;
-  }
   const birth = person.attribute('birth');
   let birthYear = birthYearAssumption;
   if (birth && 'date' in birth
@@ -183,10 +214,10 @@ async function buildTreeForPerson(person, birthYearAssumption, yearLimit) {
     console.log(`${person.name()} seems born in ${birthYear} - not looking`);
     return;
   }
-  if (!('parents' in person)) {
+  if (!('parents' in person) || person.parents === undefined) {
     await addParents(person);
   }
-  if (!('parents' in person)) {
+  if (!('parents' in person) || person.parents === undefined) {
     console.log('Could not fetch parents for ', person.name());
     return;
   }
@@ -219,20 +250,58 @@ async function buildTreeForPerson(person, birthYearAssumption, yearLimit) {
 
 async function buildTree(yearLimit) {
   await client.connect();
-  for (const {id, name} of profileList) {
-    console.log('Starting tree for root person', name);
-    const person = db.get(id);
+  for (const person of profileList) {
+    console.log('Starting tree for root person', person.name());
     await buildTreeForPerson(person, 2025, yearLimit);
   }
-  console.log('Tree build finished, computing ancestor sets');
+  console.log('Tree build finished, computing ancestor groups');
+  buildAncestorGroups();
+}
+
+function buildAncestorGroups() {
   db.createAncestors();
-  console.log('Ancestors created');
+  ancestorGroups = makeGroupList(profileList);
+  console.log('Ancestor groups are', ancestorGroups);
+  displayProfileList();
+  displayAncestorGroups();
+}
+
+function displayAncestorGroups() {
+  const dl = document.createElement('dl');
+
+  ancestorGroups.forEach(item => {
+    const dt = document.createElement('dt');
+    const personArray = item.persons.map(person => person.name());
+    personArray.forEach(personName => {
+      dt.appendChild(document.createTextNode(personName));
+      dt.appendChild(document.createElement('br'));
+    });
+    const dd = document.createElement('dd');
+    if (item.persons.length > 1) {
+      const significantAncestors = removeInnerParents(db, item.ancestors);
+      const ancestorArray = significantAncestors.values().map(ancestor => {
+        return ancestor.name() + ' (' + ancestor.birth() + ')';
+      }).toArray();
+      ancestorArray.forEach(ancestorName => {
+        dd.appendChild(document.createTextNode(ancestorName));
+        dd.appendChild(document.createElement('br'));
+      });
+    } else {
+      dd.textContent = `${item.ancestors.size} ancestors`;
+    }
+
+    dl.appendChild(dt);
+    dl.appendChild(dd);
+  });
+
+  groupListElement.innerHTML = '';
+  groupListElement.appendChild(dl);
 }
 
 // Binding actions to buttons ======================================
 
 groupNameElement.addEventListener('change', () => {
-  profileList.clear();
+  loadProfileList();
   displayProfileList();
 });
 
@@ -265,3 +334,14 @@ buildTreeButton.addEventListener('click', async () => {
     buildTreeButton.innerText = 'Build tree';
   }
 });
+
+recalculateGroupsButton.addEventListener('click', () => {
+  buildAncestorGroups();
+});
+
+// ===== Initialize the page from last saved state ====
+loadDatabase();
+console.log('Database size', db.size());
+groupNameElement.value = localStorage.getItem('currentSet');
+loadProfileList();
+buildAncestorGroups();

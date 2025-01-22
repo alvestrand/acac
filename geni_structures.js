@@ -33,4 +33,5 @@ function resolveParents(profile, unionList) {
       return union.partners;
     }
   }
+  return [];
 }

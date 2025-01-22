@@ -18,7 +18,6 @@ class GeniOperation {
 
   execute() {
     this.active = true;
-    console.log('Executing ', this.operation, this.args);
     try {
       // Geni modifies the args argument, so clone it.
       const args = structuredClone(this.args);

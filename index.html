@@ -16,7 +16,7 @@
     To the right, there will be a list of groups, each of which shares a set
     of common ancestors.
     <br/>
-    As you add profiles, the groups on the right may split or divide, and
+    As you add profiles, the groups on the right may change, and
     their lists of common ancestors may shrink.
     <br/>
     The hope is that as you add more matching profiles, the groups will
@@ -29,6 +29,10 @@
   <button id="save-database">Save database</button>
   <button id="build-tree">Build tree</button> back to
   <input type="number" id="year-limit" value="1900"></input>
+  <button id="recalculate-groups">Recalculate groups</button>
+  <br/>
+  Queue size: <span id="queue-size">
+  </span>
   <table>
     <tr>
       <td>
@@ -41,15 +45,14 @@
           <button id="add-profile-now">Add!</button>
         </p>
         <div id="add-profile-message"></div>
-        <h2>Currently fetched profiles</h2>
+        <h2>Profiles we are finding paths from</h2>
         <p>
           <div id="profile-list">
           </div>
         </p>
       </td>
       <td>
-        Queue size: <span id="queue-size">
-        </span>
+        <h2>Person groups and common ancestors</h2>
         <div id="group-list">
         </div>
       </td>
