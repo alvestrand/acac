@@ -1,5 +1,5 @@
 // Implements a database that loads and stores itself to localstorage key 'GeniDatabase'
-import { Person, Database } from '../database.js';
+import { Person, Database } from './database.js';
 
 let db = new Database;
 const databaseName = 'GeniDatabase';
