@@ -66,11 +66,25 @@ function loadProfileList() {
 
 function displayProfileList() {
   profileListElement.innerHTML = '';
+  const table = document.createElement('table');
+  const th = document.createElement('tr');
+  th.innerHTML = '<tr><th>ID<th>Name<th>Ancestors</tr>';
+  table.append(th);
+
   profileList.forEach(profile => {
-    const p = document.createElement('p');
-    p.textContent = `${profile.id()} ${profile.name()} ${profile.ancestors().size}`;
-    profileListElement.append(p);
+    const row = document.createElement('tr');
+    const p = document.createElement('td');
+    p.textContent = profile.id();
+    row.append(p);
+    const n = document.createElement('td');
+    n.textContent = profile.name();
+    row.append(n);
+    const a = document.createElement('td');
+    a.textContent = profile.ancestors().size;
+    row.append(a);
+    table.append(row);
   });
+  profileListElement.append(table);
 }
 
 function addNameToProfileList(person) {
@@ -99,25 +113,38 @@ async function addProfile() {
     addProfileMessage.innerText = 'Fetching id ' + guid;
     profileBeingFetched = guid;
     const stored = db.get(guid);
+    let fetched;
     if (stored) {
       console.log('guid ', guid, ' already in DB');
-      addProfileMessage.innerText = stored.name() + ' already in DB';
-      if (addNameToProfileList(stored)) {
-        addProfileElement.value = '';
-        if (!('parents' in stored)) {
-          console.log('Getting parents of stored profile', stored.guid());
-          await addParents(stored);
+      const mergedTo = stored.attribute('merged_into');
+      if (mergedTo == undefined) {
+        // Profile is OK
+        addProfileMessage.innerText = stored.name() + ' already in DB';
+        if (addNameToProfileList(stored)) {
+          addProfileElement.value = '';
+          if (!('parents' in stored)) {
+            console.log('Getting parents of stored profile', stored.guid());
+            await addParents(stored);
+          }
+          console.log('Building tree for added person', person.name());
+          addProfileMessage.innerText = 'Building tree for ' + person.name();
+          await buildTreeForPerson(person, 2025, Number(yearLimitElement.value));
+          buildAncestorGroups();
+          addProfileMessage.innerText = 'Finished tree building for ' + person.name();
+          return;
         }
-        console.log('Building tree for added person', person.name());
-        addProfileMessage.innerText = 'Building tree for ' + person.name();
-        await buildTreeForPerson(person, 2025, Number(yearLimitElement.value));
-        buildAncestorGroups();
-        addProfileMessage.innerText = 'Finished tree building for ' + person.name();
       }
-      return;
+      console.log('Following merged-to pointer', mergedTo);
+      fetched = await client.getPersonByUrl(mergedTo);
+    } else {
+      console.log('Adding profile ', guid);
+      fetched = await client.getPerson(guid);
     }
-    console.log('Adding profile ', guid);
-    const fetched = await client.getPerson(guid);
+    if ('merged_into' in fetched) {
+      // We assume that this goes only one level deep.
+      console.log('Follwing merged-to pointer from newly fetched');
+      fetched = await client.getPersonByUrl(fetched.merged_into);
+    }
     if (!('guid' in fetched)) {
       console.log('No guid, no profile?');
       addProfileMessage.innerText = 'Add did not find a profile';
@@ -282,6 +309,7 @@ function displayAncestorGroups() {
       const ancestorArray = significantAncestors.values().map(ancestor => {
         return ancestor.name() + ' (' + ancestor.birth() + ')';
       }).toArray();
+      console.log('AncestorArray is', ancestorArray);
       ancestorArray.forEach(ancestorName => {
         dd.appendChild(document.createTextNode(ancestorName));
         dd.appendChild(document.createElement('br'));

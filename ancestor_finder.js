@@ -63,16 +63,25 @@ function makeGroupList(personList) {
 function removeInnerParents(db, groupAncestors) {
   const ancestorList = groupAncestors.values().map(
       ancestor => db.get(ancestor)).toArray();
-  const reducedAncestorList = ancestorList.filter(person => {
-    const ancestorsInGroup = person.ancestors().intersection(groupAncestors).size;
-    if (ancestorsInGroup === groupAncestors.size - 1) {
-      console.log(person.name(), ' is the group ruler');
-      return true;
-    }
-    return false;
+  let potentialInnerIdSet = new Set();
+  // Theory: If a person is in the list, all their ancestors will also
+  // be there, and therefore don't add new information.
+  ancestorList.map(person => {
+    potentialInnerIdSet = potentialInnerIdSet.union(person.ancestors());
   });
-  if (reducedAncestorList.size === 0) {
-    return new Set(ancestorList);
+  // In theory, potentialInners is a subset of groupAncestors.
+  // Verify.
+  const subsetSize = potentialInnerIdSet.intersection(groupAncestors).size;
+  if (subsetSize != potentialInnerIdSet.size) {
+    console.log('Error: not all potential inners were in set');
   }
-  return new Set(reducedAncestorList);
+  const edgePeopleIds = groupAncestors.difference(potentialInnerIdSet);
+  // This should be >= 1 person. Verify.
+  if (edgePeopleIds.size < 1) {
+    console.log('Error: No edge people');
+  }
+  // Pick people records for the edge people
+  const edgePeople = edgePeopleIds.values().map(
+      ancestor => db.get(ancestor)).toArray();
+  return new Set(edgePeople);
 }
