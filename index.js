@@ -126,11 +126,11 @@ async function addProfile() {
             console.log('Getting parents of stored profile', stored.guid());
             await addParents(stored);
           }
-          console.log('Building tree for added person', person.name());
-          addProfileMessage.innerText = 'Building tree for ' + person.name();
-          await buildTreeForPerson(person, 2025, Number(yearLimitElement.value));
+          console.log('Building tree for added person', stored.name());
+          addProfileMessage.innerText = 'Building tree for ' + stored.name();
+          await buildTreeForPerson(stored, 2025, Number(yearLimitElement.value));
           buildAncestorGroups();
-          addProfileMessage.innerText = 'Finished tree building for ' + person.name();
+          addProfileMessage.innerText = 'Finished tree building for ' + stored.name();
           return;
         }
       }

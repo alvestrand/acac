@@ -19,6 +19,10 @@ class CommonAncestorGroup {
     this.persons.push(person);
     this.ancestors = this.ancestors.intersection(person.ancestors());
   }
+  mergeGroup(group) {
+    this.persons.push(...group.persons);
+    this.ancestors = this.ancestors.intersection(group.ancestors);
+  }
 }
 
 function mergeWithSomeGroup(person, groupList) {
@@ -48,12 +52,53 @@ function mergeWithSomeGroup(person, groupList) {
   }
 }
 
-function makeGroupList(personList) {
+// First attempt
+function makeGroupList1(personList) {
   let groupList = new Array();
   personList.map(person => {
     mergeWithSomeGroup(person, groupList);
   });
   return groupList;
+}
+
+function mergeOverlappingGroups(groupList) {
+  // Find the two groups with the most ancestors in common, and merge them.
+  let firstGroup;
+  let secondGroup;
+  let maxMatch = 0;
+  groupList.forEach(entry1 => {
+    groupList.forEach(entry2 => {
+      if (entry1 != entry2) {
+        const overlap = entry1.ancestors.intersection(entry2.ancestors).size;
+        if (overlap > maxMatch) {
+          firstGroup = entry1;
+          secondGroup = entry2;
+          maxMatch = overlap;
+        }
+      }
+    });
+  });
+  if (maxMatch === 0) {
+    return groupList;  // No change
+  }
+  console.log('Merging', firstGroup.persons[0].name(), 'with', secondGroup.persons[0].name());
+  firstGroup.mergeGroup(secondGroup);
+  const newGroupList = groupList.filter(group => group != secondGroup);
+  return newGroupList;
+}
+
+// Second attempt
+function makeGroupList(personList) {
+  let groupList = personList.map(person => new CommonAncestorGroup(person));
+  let currentSize = groupList.length;
+  while (true) {
+    console.log('Group list length is ', currentSize);
+    groupList = mergeOverlappingGroups(groupList);
+    if (currentSize == groupList.length) {
+      return groupList;
+    }
+    currentSize = groupList.length;
+  }
 }
 
 // Takes a Set(ancestor id) and removes
