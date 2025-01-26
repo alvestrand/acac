@@ -1,13 +1,16 @@
 import { Person, Database } from './database.js';
 import { GeniClient } from './async_geni.js';
 import { urlToId, resolveParents } from './geni_structures.js';
-import { loadDatabase, saveDatabase, db } from './localstoragedb.js';
+import { loadDatabase,
+         saveDatabase } from './opfsdb.js';
 import {
   CommonAncestorGroup,
   mergeWithSomeGroup,
   makeGroupList,
   removeInnerParents
 } from './ancestor_finder.js';
+
+let db = new Database;
 
 // Pick up the Geni application id
 let geniAppId;
@@ -57,7 +60,14 @@ function loadProfileList() {
   let profileListString = localStorage.getItem(groupName);
   if (profileListString) {
     const profileIdName = JSON.parse(profileListString);
-    profileList = profileIdName.map(entry => db.get(entry.id));
+    profileList = profileIdName.map(entry => {
+      const profile = db.get(entry.id);
+      if (profile) {
+        return profile;
+      } else {
+        return db.addWithAttributes(entry.id, entry.attributes);
+      }
+    });
   } else {
     profileList = new Array();
   }
@@ -117,7 +127,7 @@ async function addProfile() {
     if (stored) {
       console.log('guid ', guid, ' already in DB');
       const mergedTo = stored.attribute('merged_into');
-      if (mergedTo == undefined) {
+      if (mergedTo === undefined) {
         // Profile is OK
         addProfileMessage.innerText = stored.name() + ' already in DB';
         if (addNameToProfileList(stored)) {
@@ -343,8 +353,8 @@ addProfileButton.addEventListener('click', async () => {
   addProfile();
 });
 
-saveDatabaseButton.addEventListener('click', () => {
-  saveDatabase();
+saveDatabaseButton.addEventListener('click', async () => {
+  await saveDatabase(db);
   localStorage.setItem('profileSet-'+ groupNameElement.value,
                        JSON.stringify(profileList));
   localStorage.setItem('currentSet', groupNameElement.value);
@@ -368,7 +378,7 @@ recalculateGroupsButton.addEventListener('click', () => {
 });
 
 // ===== Initialize the page from last saved state ====
-loadDatabase();
+await loadDatabase(db);
 console.log('Database size', db.size());
 groupNameElement.value = localStorage.getItem('currentSet');
 loadProfileList();
