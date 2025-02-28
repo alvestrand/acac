@@ -241,6 +241,10 @@ async function addParents(person) {
 let building = false;
 
 async function buildTreeForPerson(person, birthYearAssumption, yearLimit) {
+  if (!person) {
+    console.log('Error: Called with no person');
+    return;
+  }
   const birth = person.attribute('birth');
   let birthYear = birthYearAssumption;
   if (birth && 'date' in birth
@@ -278,10 +282,22 @@ async function buildTreeForPerson(person, birthYearAssumption, yearLimit) {
     await Promise.all(promises);
   }
   if (person.father()) {
-    await buildTreeForPerson(db.get(person.father()), birthYear - 30, yearLimit);
+    let dbFather = db.get(person.father());
+    if (!dbFather) {
+      // somehow ref to father got stored, but not father
+      const fetched = await client.getPerson(person.father());
+      dbFather = db.addWithAttributes(fetched.guid, fetched);
+    }
+    await buildTreeForPerson(dbFather, birthYear - 30, yearLimit);
   }
   if (person.mother()) {
-    await buildTreeForPerson(db.get(person.mother()), birthYear - 30, yearLimit);
+    let dbMother = db.get(person.mother());
+    if (!dbMother) {
+      // somehow ref to mother got stored, but not mother
+      const fetched = await client.getPerson(person.mother());
+      dbMother = db.addWithAttributes(fetched.guid, fetched);
+    }
+    await buildTreeForPerson(dbMother, birthYear - 30, yearLimit);
   }
 }
 
