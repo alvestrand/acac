@@ -3,7 +3,7 @@ table, th, td {
   border-collapse: collapse;
 }
 
-#install-error {
+#error-message {
   padding: 0.5em;
   border: 2px solid darkred;
   background: #fdd;

@@ -16,10 +16,15 @@ db.sizeView = number => {
   cacheSizeElement.innerText = number;
 };
 
-function showInstallError(message) {
-  const element = document.getElementById('install-error');
-  element.innerText = 'Install error: ' + message;
-  element.hidden = false;
+const errorMessageElement = document.getElementById('error-message');
+
+function showErrorMessage(message) {
+  errorMessageElement.innerText = message;
+  errorMessageElement.hidden = false;
+}
+
+function hideErrorMessage() {
+  errorMessageElement.hidden = true;
 }
 
 // Pick up the Geni application id
@@ -32,20 +37,35 @@ try {
     console.log('Geni API is ', geniAppId);
     if (geniAppId.trim() === '') {
       console.log('Geni API key file is empty');
-      showInstallError('Geni API key missing');
+      showErrorMessage('Install error: Geni API key missing');
     }
   } else {
     console.log('Fetching Geni API key failed');
-    showInstallError('Geni API key missing');
+    showErrorMessage('Install error: Geni API key missing');
   }
 } catch(err) {
   console.log('Fetching Geni API threw, error ', err);
-  showInstallError('Geni API key missing');
+  showErrorMessage('Install error: Geni API key missing');
+}
+// Don't hide an install error behind the login status.
+if (errorMessageElement.hidden) {
+  showErrorMessage('Not logged in');
 }
 
 const client = new GeniClient(geniAppId);
 client.queueSizeView = number => {
   queueSizeElement.innerText = number;
+}
+
+// Connect to Geni, keeping the error message in sync with login status.
+async function connectToGeni() {
+  try {
+    await client.connect();
+    hideErrorMessage();
+  } catch (error) {
+    showErrorMessage('Login failed');
+    throw error;
+  }
 }
 
 let profileList = [];
@@ -129,7 +149,7 @@ let profileBeingFetched;
 async function addProfile() {
   try {
     if (!client.connected) {
-      await client.connect();
+      await connectToGeni();
     }
     const guid = isolateId(addProfileElement.value);
     if (guid === profileBeingFetched) {
@@ -318,7 +338,7 @@ async function buildTreeForPerson(person, birthYearAssumption, yearLimit) {
 }
 
 async function buildTree(yearLimit) {
-  await client.connect();
+  await connectToGeni();
   for (const person of profileList) {
     console.log('Starting tree for root person', person.name());
     await buildTreeForPerson(person, 2025, yearLimit);
