@@ -13,6 +13,15 @@ test('Putting a person in and getting it back out works', () => {
   expect(person.id()).toBe('id');
 });
 
+test('sizeView is called with the new size when entries are added', () => {
+  let db = new Database();
+  const sizes = [];
+  db.sizeView = size => sizes.push(size);
+  db.addWithAttributes('id1', { id: 'id1', name: 'one' });
+  db.addWithAttributes('id2', { id: 'id2', name: 'two' });
+  expect(sizes).toStrictEqual([1, 2]);
+});
+
 test('Save and restore to string works', () => {
   let db = new Database();
   db.addWithAttributes('id', { id: 'id', name: 'name' });

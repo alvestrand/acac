@@ -11,6 +11,16 @@ import {
 } from './ancestor_finder.js';
 
 let db = new Database;
+const cacheSizeElement = document.getElementById('cache-size');
+db.sizeView = number => {
+  cacheSizeElement.innerText = number;
+};
+
+function showInstallError(message) {
+  const element = document.getElementById('install-error');
+  element.innerText = 'Install error: ' + message;
+  element.hidden = false;
+}
 
 // Pick up the Geni application id
 let geniAppId;
@@ -20,11 +30,17 @@ try {
     geniAppId = await response.text();
     geniAppId = geniAppId.replace(/^\s+/gm, '');
     console.log('Geni API is ', geniAppId);
+    if (geniAppId.trim() === '') {
+      console.log('Geni API key file is empty');
+      showInstallError('Geni API key missing');
+    }
   } else {
     console.log('Fetching Geni API key failed');
+    showInstallError('Geni API key missing');
   }
 } catch(err) {
   console.log('Fetching Geni API threw, error ', err);
+  showInstallError('Geni API key missing');
 }
 
 const client = new GeniClient(geniAppId);
