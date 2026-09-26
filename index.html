@@ -5,9 +5,12 @@
 </head>
 <body>
   <script src="https://geni.com/jsdk.js"></script>
-  <script src="./localstoragedb.js" type="module"></script>
   <script src="./index.js" type="module"></script>
+  <div id="cache-size-box">
+    Cache entries: <span id="cache-size">0</span>
+  </div>
   <h1>All Common Ancestors Considered</h1>
+  <div id="error-message" hidden></div>
   <p>
   To use this page:<br/>
   Enter a name for the DNA match group you're working on in the "name" box.

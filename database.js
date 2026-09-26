@@ -119,17 +119,21 @@ class Database {
   constructor() {
     this.#persons = new Map();
     this.#idAttributeToGuidMap = new Map();
+    // Called with the new size whenever the number of entries changes.
+    this.sizeView = number => {};
   }
   size() {
     return this.#persons.size;
   }
   clear() {
     this.#persons.clear();
+    this.sizeView(this.#persons.size);
   }
   addPerson(person) {
     this.#persons.set(person.id(), person);
     this.#idAttributeToGuidMap.set(person.attribute('id'),
                                    person.id());
+    this.sizeView(this.#persons.size);
     return person;
   }
   addWithAttributes(id, attributes) {
