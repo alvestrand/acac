@@ -127,6 +127,7 @@ class Database {
   }
   clear() {
     this.#persons.clear();
+    this.#idAttributeToGuidMap.clear();
     this.sizeView(this.#persons.size);
   }
   addPerson(person) {
@@ -150,14 +151,20 @@ class Database {
     }
     return undefined;
   }
+  // Represent the database as an object suitable for JSON.stringify.
+  toJsonObject() {
+    return {persons: Object.fromEntries(this.#persons)};
+  }
   // Represent the database as a JSON string representation.
   toJsonString() {
-    const obj = Object.fromEntries(this.#persons);
-    return JSON.stringify({persons: obj}, null, 2);
+    return JSON.stringify(this.toJsonObject(), null, 2);
   }
   // Initialize the database from a string representing a JSON object
   fromJsonString(data) {
-    const parsed = JSON.parse(data);
+    this.fromJsonObject(JSON.parse(data));
+  }
+  // Initialize the database from a parsed JSON object
+  fromJsonObject(parsed) {
     for (const key in parsed.persons) {
       const entry = this.addWithAttributes(key, parsed.persons[key].attributes);
       // Special: restore the "parents" attribute

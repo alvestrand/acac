@@ -3,6 +3,9 @@ import { GeniClient } from './async_geni.js';
 import { urlToId, resolveParents } from './geni_structures.js';
 import { loadDatabase,
          saveDatabase } from './opfsdb.js';
+import { exportToJsonString,
+         parseExport,
+         applyImport } from './file_export.js';
 import {
   CommonAncestorGroup,
   mergeWithSomeGroup,
@@ -86,6 +89,9 @@ const addProfileMessage = document.getElementById('add-profile-message');
 const profileListElement = document.getElementById('profile-list');
 const queueSizeElement = document.getElementById('queue-size');
 const saveDatabaseButton = document.getElementById('save-database');
+const exportFileButton = document.getElementById('export-file');
+const importFileButton = document.getElementById('import-file');
+const importFileInput = document.getElementById('import-file-input');
 const buildTreeButton = document.getElementById('build-tree');
 const yearLimitElement = document.getElementById('year-limit');
 const recalculateGroupsButton = document.getElementById('recalculate-groups');
@@ -388,6 +394,38 @@ function displayAncestorGroups() {
   groupListElement.appendChild(dl);
 }
 
+// Export and import of database and groups to a file ==============
+
+function exportToFile() {
+  const exported = exportToJsonString(db, localStorage,
+                                      groupNameElement.value, profileList);
+  const blob = new Blob([exported], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'acac-' + new Date().toISOString().slice(0, 10) + '.json';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+async function importFromFile(file) {
+  let imported;
+  try {
+    imported = parseExport(await file.text());
+  } catch (error) {
+    showErrorMessage('Could not load ' + file.name + ': ' + error.message);
+    return;
+  }
+  if (!confirm('Replace the current database and all groups with the '
+               + 'contents of ' + file.name + '?')) {
+    return;
+  }
+  groupNameElement.value = applyImport(imported, db, localStorage);
+  await saveDatabase(db);
+  loadProfileList();
+  buildAncestorGroups();
+}
+
 // Binding actions to buttons ======================================
 
 groupNameElement.addEventListener('change', () => {
@@ -410,6 +448,23 @@ saveDatabaseButton.addEventListener('click', async () => {
   localStorage.setItem('profileSet-'+ groupNameElement.value,
                        JSON.stringify(profileList));
   localStorage.setItem('currentSet', groupNameElement.value);
+});
+
+exportFileButton.addEventListener('click', () => {
+  exportToFile();
+});
+
+importFileButton.addEventListener('click', () => {
+  importFileInput.click();
+});
+
+importFileInput.addEventListener('change', async () => {
+  const file = importFileInput.files[0];
+  // Reset so that choosing the same file again triggers a new change event.
+  importFileInput.value = '';
+  if (file) {
+    await importFromFile(file);
+  }
 });
 
 buildTreeButton.addEventListener('click', async () => {
