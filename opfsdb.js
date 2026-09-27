@@ -34,6 +34,7 @@ async function loadDatabase(db) {
 }
 
 async function saveDatabase(db) {
+  const startTime = performance.now();
   const estimateBefore = await navigator.storage.estimate();
   console.log('Estimated storage is ', estimateBefore.quota,
               estimateBefore.usage);
@@ -47,4 +48,6 @@ async function saveDatabase(db) {
   const estimateAfter = await navigator.storage.estimate();
   console.log('Estimated storage after is ', estimateAfter.quota,
               estimateAfter.usage);
+  console.log('Database saved in',
+              Math.round(performance.now() - startTime), 'ms');
 }

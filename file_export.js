@@ -1,28 +1,14 @@
 // Conversion of the database and the groups to and from a single JSON
 // string, used for saving to and loading from a file.
-// Groups are stored in a Storage object (normally localStorage) under
-// keys of the form 'profileSet-<group name>'.
+// In the file, each group is a list of person ids.
 
-const profileSetPrefix = 'profileSet-';
+import { profileIds } from './groups.js';
 
-// Return all groups in storage as a map of name -> profile list.
-function storedGroups(storage) {
-  const groups = {};
-  for (let i = 0; i < storage.length; i++) {
-    const key = storage.key(i);
-    if (key.startsWith(profileSetPrefix)) {
-      groups[key.substring(profileSetPrefix.length)] =
-        JSON.parse(storage.getItem(key));
-    }
-  }
-  return groups;
-}
-
-// Represent the database and all groups as a JSON string.
-// The current group is included even if it has not been saved to storage.
-function exportToJsonString(db, storage, currentGroup, currentProfileList) {
-  const groups = storedGroups(storage);
-  groups[currentGroup] = currentProfileList;
+// Represent the database and all groups in the GroupStore as a JSON string.
+// The current group is included even if it has not been saved.
+function exportToJsonString(db, groupStore, currentGroup, currentProfileIds) {
+  const groups = groupStore.groups();
+  groups[currentGroup] = currentProfileIds;
   return JSON.stringify({
     ...db.toJsonObject(),
     groups: groups,
@@ -41,24 +27,25 @@ function parseExport(data) {
   return imported;
 }
 
-// Replace the contents of the database and all groups in storage with
-// the result of parseExport. Returns the name of the current group.
-function applyImport(imported, db, storage) {
+// Replace the contents of the database and all groups in the GroupStore
+// with the result of parseExport. Returns the name of the current group.
+// Files from older versions may have person records instead of ids
+// in the groups; these are converted to ids.
+function applyImport(imported, db, groupStore) {
   db.clear();
   db.fromJsonObject(imported);
-  for (const name of Object.keys(storedGroups(storage))) {
-    storage.removeItem(profileSetPrefix + name);
+  for (const name of Object.keys(groupStore.groups())) {
+    groupStore.remove(name);
   }
   for (const [name, profiles] of Object.entries(imported.groups)) {
-    storage.setItem(profileSetPrefix + name, JSON.stringify(profiles));
+    groupStore.save(name, profileIds(profiles));
   }
   const currentGroup = imported.currentGroup ?? '';
-  storage.setItem('currentSet', currentGroup);
+  groupStore.setCurrentName(currentGroup);
   return currentGroup;
 }
 
 export {
-  storedGroups,
   exportToJsonString,
   parseExport,
   applyImport

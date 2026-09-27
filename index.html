@@ -13,7 +13,8 @@
   <div id="error-message" hidden></div>
   <p>
   To use this page:<br/>
-  Enter a name for the DNA match group you're working on in the "name" box.
+  Choose the DNA match group you're working on in the "Group" menu, or pick
+  "New group&hellip;" to create one.
   Enter an URL or a GUID of a Geni profile in the "add" box.
   <p>
     The list of currently considered profiles will appear below the "add" box.
@@ -44,7 +45,12 @@
     <tr>
       <td>
         <p>
-          Group name:<input type="text" id="group-name"></input>
+          Group:<select id="group-select"></select>
+          <span id="new-group-box" hidden>
+            Name:<input type="text" id="new-group-name"></input>
+            <button id="new-group-create">Create</button>
+            <button id="new-group-cancel">Cancel</button>
+          </span>
           </p>
         <p>
           Add profile:<input type="text" id="add-profile"
