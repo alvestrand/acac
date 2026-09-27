@@ -2,3 +2,5 @@
 node_modules
 .geni_app_id
 \#*#
+.aider*
+.claude/settings.local.json
