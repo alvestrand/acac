@@ -1,30 +1,11 @@
 import { Database } from './database.js';
+import { GroupStore } from './groups.js';
+import { FakeStorage } from './fake_storage.js';
 import {
-  storedGroups,
   exportToJsonString,
   parseExport,
   applyImport
 } from './file_export.js';
-
-// Minimal in-memory implementation of the Storage interface.
-class FakeStorage {
-  #items = new Map();
-  get length() {
-    return this.#items.size;
-  }
-  key(index) {
-    return [...this.#items.keys()][index] ?? null;
-  }
-  getItem(key) {
-    return this.#items.has(key) ? this.#items.get(key) : null;
-  }
-  setItem(key, value) {
-    this.#items.set(key, String(value));
-  }
-  removeItem(key) {
-    this.#items.delete(key);
-  }
-}
 
 function makeSourceState() {
   const db = new Database();
@@ -33,28 +14,24 @@ function makeSourceState() {
   child.setFather('g1');
   child.parents = ['https://www.geni.com/api/profile-1'];
   const storage = new FakeStorage();
+  // Stored the way older versions did it, with whole person records.
   storage.setItem('profileSet-saved', JSON.stringify([father]));
+  storage.setItem('profileSet-ids', JSON.stringify(['g2']));
   storage.setItem('unrelated', 'keep me');
-  return { db, storage, father, child };
+  return { db, groupStore: new GroupStore(storage), father };
 }
 
-test('storedGroups returns only profile sets', () => {
-  const { storage } = makeSourceState();
-  const groups = storedGroups(storage);
-  expect(Object.keys(groups)).toStrictEqual(['saved']);
-  expect(groups.saved[0].id).toBe('g1');
-});
-
 test('Export and import round trip restores persons and groups', () => {
-  const { db, storage, child } = makeSourceState();
-  const exported = exportToJsonString(db, storage, 'current', [child]);
+  const { db, groupStore } = makeSourceState();
+  const exported = exportToJsonString(db, groupStore, 'current', ['g2']);
 
   const db2 = new Database();
   const storage2 = new FakeStorage();
-  const currentGroup = applyImport(parseExport(exported), db2, storage2);
+  const groupStore2 = new GroupStore(storage2);
+  const currentGroup = applyImport(parseExport(exported), db2, groupStore2);
 
   expect(currentGroup).toBe('current');
-  expect(storage2.getItem('currentSet')).toBe('current');
+  expect(groupStore2.currentName()).toBe('current');
   expect(db2.size()).toBe(2);
   const restoredChild = db2.get('g2');
   expect(restoredChild.name()).toBe('Child');
@@ -63,36 +40,61 @@ test('Export and import round trip restores persons and groups', () => {
     ['https://www.geni.com/api/profile-1']);
   expect(db2.getByIdAttribute('profile-1').name()).toBe('Father');
 
-  const groups = storedGroups(storage2);
-  expect(Object.keys(groups).sort()).toStrictEqual(['current', 'saved']);
-  expect(groups.saved.map(p => p.id)).toStrictEqual(['g1']);
-  expect(groups.current.map(p => p.id)).toStrictEqual(['g2']);
+  const groups = groupStore2.groups();
+  expect(Object.keys(groups).sort()).toStrictEqual(['current', 'ids', 'saved']);
+  expect(groups.saved).toStrictEqual(['g1']);
+  expect(groups.current).toStrictEqual(['g2']);
+  expect(JSON.parse(storage2.getItem('profileSet-saved'))).toStrictEqual(['g1']);
 });
 
 test('Export includes current group even when not in storage', () => {
-  const { db, child } = makeSourceState();
-  const exported = exportToJsonString(db, new FakeStorage(), 'unsaved', [child]);
+  const { db } = makeSourceState();
+  const exported = exportToJsonString(db, new GroupStore(new FakeStorage()),
+                                      'unsaved', ['g2']);
   const parsed = parseExport(exported);
   expect(Object.keys(parsed.groups)).toStrictEqual(['unsaved']);
   expect(parsed.currentGroup).toBe('unsaved');
 });
 
 test('Import replaces existing persons and groups', () => {
-  const { db, storage, child } = makeSourceState();
-  const exported = exportToJsonString(db, storage, 'current', [child]);
+  const { db, groupStore } = makeSourceState();
+  const exported = exportToJsonString(db, groupStore, 'current', ['g2']);
 
   const db2 = new Database();
   db2.addWithAttributes('old', { id: 'profile-old', name: 'Old' });
   const storage2 = new FakeStorage();
   storage2.setItem('profileSet-stale', '[]');
   storage2.setItem('unrelated', 'keep me');
-  applyImport(parseExport(exported), db2, storage2);
+  applyImport(parseExport(exported), db2, new GroupStore(storage2));
 
   expect(db2.get('old')).toBeUndefined();
   expect(db2.getByIdAttribute('profile-old')).toBeUndefined();
   expect(db2.size()).toBe(2);
   expect(storage2.getItem('profileSet-stale')).toBeNull();
   expect(storage2.getItem('unrelated')).toBe('keep me');
+});
+
+test('Exported groups contain only ids', () => {
+  const { db, groupStore } = makeSourceState();
+  const parsed = parseExport(
+    exportToJsonString(db, groupStore, 'current', ['g2']));
+  expect(parsed.groups).toStrictEqual({
+    saved: ['g1'],
+    ids: ['g2'],
+    current: ['g2']
+  });
+});
+
+test('Import accepts files with whole person records in groups', () => {
+  const { db, father } = makeSourceState();
+  const oldFormat = JSON.stringify({
+    ...db.toJsonObject(),
+    groups: { old: [father] },
+    currentGroup: 'old'
+  });
+  const storage2 = new FakeStorage();
+  applyImport(parseExport(oldFormat), new Database(), new GroupStore(storage2));
+  expect(JSON.parse(storage2.getItem('profileSet-old'))).toStrictEqual(['g1']);
 });
 
 test('parseExport rejects invalid JSON', () => {

@@ -3,6 +3,7 @@ import { GeniClient } from './async_geni.js';
 import { urlToId, resolveParents } from './geni_structures.js';
 import { loadDatabase,
          saveDatabase } from './opfsdb.js';
+import { GroupStore } from './groups.js';
 import { exportToJsonString,
          parseExport,
          applyImport } from './file_export.js';
@@ -82,7 +83,11 @@ function isolateId(url) {
 }
 
 // Get UI elements from HTML file.
-const groupNameElement = document.getElementById('group-name');
+const groupSelectElement = document.getElementById('group-select');
+const newGroupBox = document.getElementById('new-group-box');
+const newGroupNameElement = document.getElementById('new-group-name');
+const newGroupCreateButton = document.getElementById('new-group-create');
+const newGroupCancelButton = document.getElementById('new-group-cancel');
 const addProfileElement = document.getElementById('add-profile');
 const addProfileButton = document.getElementById('add-profile-now');
 const addProfileMessage = document.getElementById('add-profile-message');
@@ -97,22 +102,86 @@ const yearLimitElement = document.getElementById('year-limit');
 const recalculateGroupsButton = document.getElementById('recalculate-groups');
 const groupListElement = document.getElementById('group-list');
 
-function loadProfileList() {
-  let groupName = 'profileSet-' + groupNameElement.value;
-  let profileListString = localStorage.getItem(groupName);
-  if (profileListString) {
-    const profileIdName = JSON.parse(profileListString);
-    profileList = profileIdName.map(entry => {
-      const profile = db.get(entry.id);
-      if (profile) {
-        return profile;
-      } else {
-        return db.addWithAttributes(entry.id, entry.attributes);
-      }
-    });
-  } else {
-    profileList = new Array();
+// Groups of profiles, saved in the browser's local storage.
+const groupStore = new GroupStore(localStorage);
+// Name of the group currently being worked on.
+let currentGroup = '';
+// The "New group..." entry at the end of the group dropdown.
+let newGroupOption;
+
+// Fill the group dropdown with all stored groups, plus the current
+// group even if it hasn't been saved, and select the current group.
+function displayGroupSelect() {
+  groupSelectElement.innerHTML = '';
+  groupStore.names(currentGroup).forEach(name => {
+    const option = document.createElement('option');
+    option.value = name;
+    option.textContent = name === '' ? '(unnamed)' : name;
+    groupSelectElement.append(option);
+  });
+  newGroupOption = document.createElement('option');
+  newGroupOption.textContent = 'New group\u2026';
+  groupSelectElement.append(newGroupOption);
+  groupSelectElement.value = currentGroup;
+}
+
+function selectGroup(name) {
+  currentGroup = name;
+  newGroupBox.hidden = true;
+  displayGroupSelect();
+  loadProfileList();
+}
+
+// Leave the "New group..." state without reloading the current group,
+// so that unsaved profiles are kept.
+function cancelNewGroup() {
+  newGroupBox.hidden = true;
+  groupSelectElement.value = currentGroup;
+}
+
+function currentProfileIds() {
+  return profileList.map(p => p.id());
+}
+
+// Save the database and the current group, same as the "Save database" button.
+async function saveCurrentState() {
+  await saveDatabase(db);
+  groupStore.save(currentGroup, currentProfileIds());
+  groupStore.setCurrentName(currentGroup);
+}
+
+// Save the database and the current group, then switch to another group
+// and recalculate its ancestor groups.
+async function switchToGroup(name) {
+  await saveDatabase(db);
+  groupStore.switchTo(currentGroup, currentProfileIds(), name);
+  selectGroup(name);
+  buildAncestorGroups();
+}
+
+async function createNewGroup() {
+  const name = groupStore.create(newGroupNameElement.value);
+  if (name === null) {
+    return;
   }
+  await switchToGroup(name);
+}
+
+function loadProfileList() {
+  // Entries are ids. Older versions stored whole person records,
+  // which can be used if the person is missing from the database.
+  profileList = groupStore.entries(currentGroup).map(entry => {
+    const id = typeof entry === 'string' ? entry : entry.id;
+    const profile = db.get(id);
+    if (profile) {
+      return profile;
+    } else if (entry.attributes) {
+      return db.addWithAttributes(id, entry.attributes);
+    } else {
+      console.log('Group member', id, 'not found in database');
+      return undefined;
+    }
+  }).filter(profile => profile);
   displayProfileList();
 }
 
@@ -397,8 +466,8 @@ function displayAncestorGroups() {
 // Export and import of database and groups to a file ==============
 
 function exportToFile() {
-  const exported = exportToJsonString(db, localStorage,
-                                      groupNameElement.value, profileList);
+  const exported = exportToJsonString(db, groupStore, currentGroup,
+                                      currentProfileIds());
   const blob = new Blob([exported], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -420,17 +489,38 @@ async function importFromFile(file) {
                + 'contents of ' + file.name + '?')) {
     return;
   }
-  groupNameElement.value = applyImport(imported, db, localStorage);
+  const importedGroup = applyImport(imported, db, groupStore);
   await saveDatabase(db);
-  loadProfileList();
+  selectGroup(importedGroup);
   buildAncestorGroups();
 }
 
 // Binding actions to buttons ======================================
 
-groupNameElement.addEventListener('change', () => {
-  loadProfileList();
-  displayProfileList();
+groupSelectElement.addEventListener('change', async () => {
+  if (groupSelectElement.selectedOptions[0] === newGroupOption) {
+    newGroupNameElement.value = '';
+    newGroupBox.hidden = false;
+    newGroupNameElement.focus();
+  } else {
+    await switchToGroup(groupSelectElement.value);
+  }
+});
+
+newGroupCreateButton.addEventListener('click', () => {
+  createNewGroup();
+});
+
+newGroupNameElement.addEventListener('keydown', event => {
+  if (event.key === 'Enter') {
+    createNewGroup();
+  } else if (event.key === 'Escape') {
+    cancelNewGroup();
+  }
+});
+
+newGroupCancelButton.addEventListener('click', () => {
+  cancelNewGroup();
 });
 
 addProfileElement.addEventListener('change', async () => {
@@ -444,10 +534,7 @@ addProfileButton.addEventListener('click', async () => {
 });
 
 saveDatabaseButton.addEventListener('click', async () => {
-  await saveDatabase(db);
-  localStorage.setItem('profileSet-'+ groupNameElement.value,
-                       JSON.stringify(profileList));
-  localStorage.setItem('currentSet', groupNameElement.value);
+  await saveCurrentState();
 });
 
 exportFileButton.addEventListener('click', () => {
@@ -487,6 +574,5 @@ recalculateGroupsButton.addEventListener('click', () => {
 // ===== Initialize the page from last saved state ====
 await loadDatabase(db);
 console.log('Database size', db.size());
-groupNameElement.value = localStorage.getItem('currentSet');
-loadProfileList();
+selectGroup(groupStore.currentName());
 buildAncestorGroups();
