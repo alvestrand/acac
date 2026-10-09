@@ -272,11 +272,14 @@ function removeFromProfileList(profile) {
 let profileBeingFetched;
 
 async function addProfile() {
+  if (addProfileElement.value.trim() === '') {
+    return;
+  }
   try {
     if (!client.connected) {
       await connectToGeni();
     }
-    const guid = isolateId(addProfileElement.value);
+    const guid = isolateId(addProfileElement.value.trim());
     if (guid === profileBeingFetched) {
       console.log('addProfile called twice on', guid, ', ignoring');
       return;
