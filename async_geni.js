@@ -16,7 +16,9 @@ class GeniOperation {
     this.fulfilled = false;
   }
 
-  execute() {
+  // Run the operation. Calls rateLimitView with true when Geni says
+  // the rate limit is exceeded, and with false on any other answer.
+  execute(rateLimitView) {
     this.active = true;
     try {
       // Geni modifies the args argument, so clone it.
@@ -26,12 +28,15 @@ class GeniOperation {
           if (data.error.type == 'ApiException'
               && data.error.message == 'Rate limit exceeded.') {
             // Not fulfilled, will be retried in next round
+            rateLimitView(true);
           } else {
+            rateLimitView(false);
             console.log('Operation failed with error', data.error);
             this.fulfilled = true;
             this.reject(data.error);
           }
         } else {
+          rateLimitView(false);
           this.fulfilled = true;
           this.resolve(data);
         }
@@ -48,15 +53,26 @@ class GeniOperation {
 
 class GeniClient {
   #operationQueue;
+  // True from when Geni says the rate limit is exceeded until
+  // an operation gets another answer.
+  #rateLimited = false;
 
   constructor(appId) {
     this.connected = false;
     this.#operationQueue = [];
-    this.queueSizeView = number => {};
+    // Called with the number of queued operations, and whether the
+    // connection is waiting for the Geni rate limit.
+    this.queueSizeView = (number, waiting) => {};
     Geni.init({
       app_id: appId,
       cookie: true,
       logging: false,
+    });
+  }
+
+  #execute(op) {
+    op.execute(rateLimited => {
+      this.#rateLimited = rateLimited;
     });
   }
 
@@ -67,16 +83,16 @@ class GeniClient {
       if (op.fulfilled) {
         this.#operationQueue.shift();
         if (this.#operationQueue.length > 0) {
-          this.#operationQueue[0].execute();
+          this.#execute(this.#operationQueue[0]);
         }
       } else if (op.active) {
         // return later
       } else {
-        op.execute();
+        this.#execute(op);
       }
       setTimeout(this.runOperations.bind(this), 5000);
     }
-    this.queueSizeView(this.#operationQueue.length);
+    this.queueSizeView(this.#operationQueue.length, this.#rateLimited);
   }
 
   async connect() {

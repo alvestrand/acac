@@ -136,3 +136,40 @@ test('Operations are executed one at a time, in order', async () => {
   jest.advanceTimersByTime(5000);
   expect(queueSizes.at(-1)).toBe(0);
 });
+
+test('queueSizeView reports waiting while rate limited', async () => {
+  let rateLimited = true;
+  apiHandler = (operation, args, callback) => {
+    if (rateLimited) {
+      callback({ error: { type: 'ApiException',
+                          message: 'Rate limit exceeded.' } });
+    } else {
+      callback({ ok: true });
+    }
+  };
+  const client = new GeniClient('app');
+  const views = [];
+  client.queueSizeView = (size, waiting) => views.push([size, waiting]);
+
+  const promise = client.getPerson('1');
+  expect(views.at(-1)).toEqual([1, true]);
+  jest.advanceTimersByTime(5000);
+  expect(views.at(-1)).toEqual([1, true]);
+
+  rateLimited = false;
+  jest.advanceTimersByTime(5000);
+  await expect(promise).resolves.toEqual({ ok: true });
+  expect(views.at(-1)).toEqual([1, false]);
+  jest.advanceTimersByTime(5000);
+  expect(views.at(-1)).toEqual([0, false]);
+});
+
+test('queueSizeView does not report waiting for a normal queue', () => {
+  apiHandler = () => {};
+  const client = new GeniClient('app');
+  const views = [];
+  client.queueSizeView = (size, waiting) => views.push([size, waiting]);
+  client.getPerson('1');
+  client.getPerson('2');
+  expect(views).toEqual([[1, false], [2, false]]);
+});
