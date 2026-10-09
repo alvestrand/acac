@@ -208,11 +208,30 @@ function profileLink(person) {
   return link;
 }
 
+// Returns a menu of actions on a profile in the current group.
+function profileMenu(profile) {
+  const select = document.createElement('select');
+  const title = document.createElement('option');
+  title.value = '';
+  title.textContent = 'Actions\u2026';
+  const remove = document.createElement('option');
+  remove.value = 'remove';
+  remove.textContent = 'Remove from group';
+  select.append(title, remove);
+  select.addEventListener('change', () => {
+    if (select.value === 'remove') {
+      removeFromProfileList(profile);
+    }
+    select.value = '';
+  });
+  return select;
+}
+
 function displayProfileList() {
   profileListElement.innerHTML = '';
   const table = document.createElement('table');
   const th = document.createElement('tr');
-  th.innerHTML = '<tr><th>Name<th>Ancestors</tr>';
+  th.innerHTML = '<tr><th>Name<th>Ancestors<th></tr>';
   table.append(th);
 
   profileList.forEach(profile => {
@@ -223,6 +242,9 @@ function displayProfileList() {
     const a = document.createElement('td');
     a.textContent = profile.ancestors().size;
     row.append(a);
+    const m = document.createElement('td');
+    m.append(profileMenu(profile));
+    row.append(m);
     table.append(row);
   });
   profileListElement.append(table);
@@ -237,6 +259,14 @@ function addNameToProfileList(person) {
     displayProfileList();
     return true;
   }
+}
+
+// Remove a profile from the current group. The person stays in the
+// database. Like adding, this takes effect in storage when the group
+// is saved.
+function removeFromProfileList(profile) {
+  profileList = profileList.filter(entry => entry !== profile);
+  buildAncestorGroups();
 }
 
 let profileBeingFetched;
