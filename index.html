@@ -36,14 +36,14 @@
   <button id="import-file">Load from file</button>
   <input type="file" id="import-file-input" accept=".json,application/json" hidden></input>
   <button id="build-tree">Build tree</button> back to
-  <input type="number" id="year-limit" value="1900"></input>
+  <input type="number" id="year-limit" value="1750"></input>
   <button id="recalculate-groups">Recalculate groups</button>
   <br/>
   Queue size: <span id="queue-size">
   </span>
-  <table>
+  <table id="layout">
     <tr>
-      <td>
+      <td colspan="2">
         <p>
           Group:<select id="group-select"></select>
           <span id="new-group-box" hidden>
@@ -58,6 +58,10 @@
           <button id="add-profile-now">Add!</button>
         </p>
         <div id="add-profile-message"></div>
+      </td>
+    </tr>
+    <tr>
+      <td>
         <h2>Profiles we are finding paths from</h2>
         <p>
           <div id="profile-list">

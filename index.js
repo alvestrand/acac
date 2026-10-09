@@ -185,20 +185,28 @@ function loadProfileList() {
   displayProfileList();
 }
 
+// Returns a link that opens the person's Geni profile in a new tab.
+function profileLink(person) {
+  const link = document.createElement('a');
+  link.href = person.attribute('profile_url') ||
+    'https://www.geni.com/people/profile/' + person.guid();
+  link.target = '_blank';
+  link.rel = 'noopener';
+  link.textContent = person.name();
+  return link;
+}
+
 function displayProfileList() {
   profileListElement.innerHTML = '';
   const table = document.createElement('table');
   const th = document.createElement('tr');
-  th.innerHTML = '<tr><th>ID<th>Name<th>Ancestors</tr>';
+  th.innerHTML = '<tr><th>Name<th>Ancestors</tr>';
   table.append(th);
 
   profileList.forEach(profile => {
     const row = document.createElement('tr');
-    const p = document.createElement('td');
-    p.textContent = profile.id();
-    row.append(p);
     const n = document.createElement('td');
-    n.textContent = profile.name();
+    n.append(profileLink(profile));
     row.append(n);
     const a = document.createElement('td');
     a.textContent = profile.ancestors().size;
@@ -443,12 +451,9 @@ function displayAncestorGroups() {
     const dd = document.createElement('dd');
     if (item.persons.length > 1) {
       const significantAncestors = removeInnerParents(db, item.ancestors);
-      const ancestorArray = significantAncestors.values().map(ancestor => {
-        return ancestor.name() + ' (' + ancestor.birth() + ')';
-      }).toArray();
-      console.log('AncestorArray is', ancestorArray);
-      ancestorArray.forEach(ancestorName => {
-        dd.appendChild(document.createTextNode(ancestorName));
+      significantAncestors.forEach(ancestor => {
+        dd.appendChild(profileLink(ancestor));
+        dd.appendChild(document.createTextNode(' (' + ancestor.birth() + ')'));
         dd.appendChild(document.createElement('br'));
       });
     } else {
