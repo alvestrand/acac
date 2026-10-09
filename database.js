@@ -104,6 +104,10 @@ class Person {
       }
     }
   }
+  // Forget the set of ancestors, so that addAncestors builds it again.
+  clearAncestors() {
+    this.#ancestors = undefined;
+  }
   ancestors() {
     if (this.#ancestors === undefined) {
       return new Set();
@@ -183,8 +187,13 @@ class Database {
     });
     return result;
   }
+  // Build the ancestor sets of all entries from the current parent links.
+  // Sets built earlier are rebuilt, since links may have been added since.
   createAncestors() {
-    console.log('Creating ancestors for all entries that don\'t have it');
+    console.log('Creating ancestors for all entries');
+    this.#persons.forEach(person => {
+      person.clearAncestors();
+    });
     this.#persons.forEach(person => {
       person.addAncestors(this);
     });
