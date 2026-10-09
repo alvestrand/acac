@@ -46,3 +46,17 @@ test('Save and restore to string works with parent extras', () => {
   expect(person.id()).toBe('id');
   expect(person.parents).toStrictEqual(['random']);
 });
+
+test('createAncestors picks up parent links added after an earlier run', () => {
+  const db = new Database();
+  db.addWithAttributes('gf', { name: 'Grandfather' });
+  const father = db.addWithAttributes('f', { name: 'Father' });
+  const child = db.addWithAttributes('c', { name: 'Child', father: 'f' });
+  db.createAncestors();
+  expect([...child.ancestors()]).toStrictEqual(['f']);
+
+  father.setFather('gf');
+  db.createAncestors();
+  expect([...father.ancestors()]).toStrictEqual(['gf']);
+  expect([...child.ancestors()].sort()).toStrictEqual(['f', 'gf']);
+});

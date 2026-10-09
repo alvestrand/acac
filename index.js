@@ -6,7 +6,10 @@ import { loadDatabase,
 import { GroupStore } from './groups.js';
 import { exportToJsonString,
          parseExport,
-         applyImport } from './file_export.js';
+         applyImport,
+         exportGroupToJsonString,
+         parseGroupExport,
+         mergeGroupImport } from './file_export.js';
 import {
   CommonAncestorGroup,
   mergeWithSomeGroup,
@@ -88,6 +91,10 @@ const newGroupBox = document.getElementById('new-group-box');
 const newGroupNameElement = document.getElementById('new-group-name');
 const newGroupCreateButton = document.getElementById('new-group-create');
 const newGroupCancelButton = document.getElementById('new-group-cancel');
+const saveGroupButton = document.getElementById('save-group');
+const loadGroupButton = document.getElementById('load-group');
+const loadGroupInput = document.getElementById('load-group-input');
+const groupFileMessage = document.getElementById('group-file-message');
 const addProfileElement = document.getElementById('add-profile');
 const addProfileButton = document.getElementById('add-profile-now');
 const addProfileMessage = document.getElementById('add-profile-message');
@@ -470,16 +477,60 @@ function displayAncestorGroups() {
 
 // Export and import of database and groups to a file ==============
 
-function exportToFile() {
-  const exported = exportToJsonString(db, groupStore, currentGroup,
-                                      currentProfileIds());
-  const blob = new Blob([exported], { type: 'application/json' });
+// Offer a JSON string to the user as a file download.
+function downloadJson(json, fileName) {
+  const blob = new Blob([json], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = 'acac-' + new Date().toISOString().slice(0, 10) + '.json';
+  a.download = fileName;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+function today() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function exportToFile() {
+  const exported = exportToJsonString(db, groupStore, currentGroup,
+                                      currentProfileIds());
+  downloadJson(exported, 'acac-' + today() + '.json');
+}
+
+function saveGroupToFile() {
+  const exported = exportGroupToJsonString(currentGroup, currentProfileIds(),
+                                           db);
+  const groupName = currentGroup === '' ? 'unnamed' : currentGroup;
+  downloadJson(exported, 'acac-group-' + groupName + '-' + today() + '.json');
+}
+
+// Merge the persons in a group file into the database, and make the
+// group in the file the current group.
+async function loadGroupFromFile(file) {
+  let imported;
+  try {
+    imported = parseGroupExport(await file.text());
+  } catch (error) {
+    showErrorMessage('Could not load ' + file.name + ': ' + error.message);
+    return;
+  }
+  const groupName = imported.groupName;
+  if ((groupStore.has(groupName) || groupName === currentGroup)
+      && !confirm('Replace the members of group "' + groupName
+                  + '" with those in ' + file.name + '?')) {
+    return;
+  }
+  const result = mergeGroupImport(imported, db);
+  await saveDatabase(db);
+  groupStore.switchTo(currentGroup, currentProfileIds(), groupName);
+  groupStore.save(groupName, result.ids);
+  selectGroup(groupName);
+  buildAncestorGroups();
+  groupFileMessage.innerText = `Loaded ${imported.persons.length} profiles `
+    + `(${result.ids.length} members and their ancestors): `
+    + `${result.added} new, ${result.replaced} updated from the file, `
+    + `${result.kept} kept as in the database`;
 }
 
 async function importFromFile(file) {
@@ -526,6 +577,23 @@ newGroupNameElement.addEventListener('keydown', event => {
 
 newGroupCancelButton.addEventListener('click', () => {
   cancelNewGroup();
+});
+
+saveGroupButton.addEventListener('click', () => {
+  saveGroupToFile();
+});
+
+loadGroupButton.addEventListener('click', () => {
+  loadGroupInput.click();
+});
+
+loadGroupInput.addEventListener('change', async () => {
+  const file = loadGroupInput.files[0];
+  // Reset so that choosing the same file again triggers a new change event.
+  loadGroupInput.value = '';
+  if (file) {
+    await loadGroupFromFile(file);
+  }
 });
 
 addProfileElement.addEventListener('change', async () => {
