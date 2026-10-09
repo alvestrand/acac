@@ -57,8 +57,13 @@ if (errorMessageElement.hidden) {
 }
 
 const client = new GeniClient(geniAppId);
-client.queueSizeView = number => {
-  queueSizeElement.innerText = number;
+client.queueSizeView = (number, waiting) => {
+  if (number === 0) {
+    queueSizeElement.innerText = 'Queue empty';
+  } else {
+    queueSizeElement.innerText = 'Queue size: ' + number
+      + (waiting ? ' waiting' : '');
+  }
 }
 
 // Connect to Geni, keeping the error message in sync with login status.
