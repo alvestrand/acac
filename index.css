@@ -3,6 +3,18 @@ table, th, td {
   border-collapse: collapse;
 }
 
+td {
+  vertical-align: top;
+}
+
+th, td {
+  padding: 0.2em;
+}
+
+#layout > tbody > tr > td {
+  padding: 0.5em;
+}
+
 #error-message {
   padding: 0.5em;
   border: 2px solid darkred;
