@@ -5,6 +5,10 @@
 export { GeniClient };
 import { urlToId } from './geni_structures.js';
 
+// How long to wait before retrying when Geni says the rate limit
+// is exceeded, in milliseconds.
+const rateLimitRetryDelay = 5000;
+
 class GeniOperation {
 
   constructor(operation, args, resolve, reject) {
@@ -12,14 +16,14 @@ class GeniOperation {
     this.args = args;
     this.resolve = resolve;
     this.reject = reject;
-    this.active = false;
-    this.fulfilled = false;
   }
 
-  // Run the operation. Calls rateLimitView with true when Geni says
-  // the rate limit is exceeded, and with false on any other answer.
-  execute(rateLimitView) {
-    this.active = true;
+  // Run the operation. Calls done with 'rateLimited' when Geni says the
+  // rate limit is exceeded, in which case the operation should be run
+  // again later. Otherwise the operation is resolved or rejected, and
+  // done is called with 'answered' if Geni answered, or 'failed' if the
+  // call to Geni threw.
+  execute(done) {
     try {
       // Geni modifies the args argument, so clone it.
       const args = structuredClone(this.args);
@@ -27,31 +31,28 @@ class GeniOperation {
         if (data.error) {
           if (data.error.type == 'ApiException'
               && data.error.message == 'Rate limit exceeded.') {
-            // Not fulfilled, will be retried in next round
-            rateLimitView(true);
-          } else {
-            rateLimitView(false);
-            console.log('Operation failed with error', data.error);
-            this.fulfilled = true;
-            this.reject(data.error);
+            done('rateLimited');
+            return;
           }
+          console.log('Operation failed with error', data.error);
+          this.reject(data.error);
         } else {
-          rateLimitView(false);
-          this.fulfilled = true;
           this.resolve(data);
         }
-        this.active = false;
+        done('answered');
       });
     }
     catch (error) {
       console.log('Operation threw an error');
-      this.fulfilled = true;
       this.reject(error);
+      done('failed');
     }
   }
 }
 
 class GeniClient {
+  // Operations waiting to run. The first one is running, or waiting
+  // to be retried because of the rate limit.
   #operationQueue;
   // True from when Geni says the rate limit is exceeded until
   // an operation gets another answer.
@@ -70,28 +71,37 @@ class GeniClient {
     });
   }
 
-  #execute(op) {
-    op.execute(rateLimited => {
-      this.#rateLimited = rateLimited;
-    });
+  // Add an operation to the queue, starting it at once if nothing
+  // else is running.
+  #enqueue(op) {
+    this.#operationQueue.push(op);
+    if (this.#operationQueue.length === 1) {
+      this.#execute(op);
+    }
+    this.#showQueueSize();
   }
 
-  runOperations() {
-    if (this.#operationQueue.length > 0) {
-      const op = this.#operationQueue[0];
-      // Operations get fulfilled asynchronously.
-      if (op.fulfilled) {
+  // Run an operation. When it is finished, start the next one at once.
+  // When rate limited, run it again after a delay.
+  #execute(op) {
+    op.execute(outcome => {
+      if (outcome === 'rateLimited') {
+        this.#rateLimited = true;
+        setTimeout(() => this.#execute(op), rateLimitRetryDelay);
+      } else {
+        if (outcome === 'answered') {
+          this.#rateLimited = false;
+        }
         this.#operationQueue.shift();
         if (this.#operationQueue.length > 0) {
           this.#execute(this.#operationQueue[0]);
         }
-      } else if (op.active) {
-        // return later
-      } else {
-        this.#execute(op);
       }
-      setTimeout(this.runOperations.bind(this), 5000);
-    }
+      this.#showQueueSize();
+    });
+  }
+
+  #showQueueSize() {
     this.queueSizeView(this.#operationQueue.length, this.#rateLimited);
   }
 
@@ -117,8 +127,7 @@ class GeniClient {
     return new Promise((resolve, reject) => {
       const op = new GeniOperation('/profile' + '-g' + guid, [],
                              resolve, reject);
-      this.#operationQueue.push(op);
-      this.runOperations();
+      this.#enqueue(op);
     });
   }
 
@@ -126,8 +135,7 @@ class GeniClient {
     return new Promise((resolve, reject) => {
       const urlOp = urlToId(url);
       const op = new GeniOperation(urlOp, [], resolve, reject);
-      this.#operationQueue.push(op);
-      this.runOperations();
+      this.#enqueue(op);
     });
   }
 
@@ -135,8 +143,7 @@ class GeniClient {
     return new Promise((resolve, reject) => {
       const op = new GeniOperation('/union', {ids: unions},
                                    resolve, reject);
-      this.#operationQueue.push(op);
-      this.runOperations();
+      this.#enqueue(op);
     });
   }
 }
