@@ -123,18 +123,70 @@ test('Operations are executed one at a time, in order', async () => {
   jest.advanceTimersByTime(5000);
   expect(Geni.api).toHaveBeenCalledTimes(1);
 
+  // The second operation starts as soon as the first is finished.
   pending[0]({ id: 'first' });
-  await expect(first).resolves.toEqual({ id: 'first' });
-
-  jest.advanceTimersByTime(5000);
   expect(Geni.api).toHaveBeenCalledTimes(2);
   expect(Geni.api.mock.calls[1][0]).toBe('/profile-g2');
+  expect(queueSizes.at(-1)).toBe(1);
+  await expect(first).resolves.toEqual({ id: 'first' });
 
   pending[1]({ id: 'second' });
-  await expect(second).resolves.toEqual({ id: 'second' });
-
-  jest.advanceTimersByTime(5000);
   expect(queueSizes.at(-1)).toBe(0);
+  await expect(second).resolves.toEqual({ id: 'second' });
+});
+
+test('Rate-limited operations are retried only after the delay', () => {
+  let rateLimited = true;
+  const pending = [];
+  apiHandler = (operation, args, callback) => {
+    if (rateLimited) {
+      callback({ error: { type: 'ApiException',
+                          message: 'Rate limit exceeded.' } });
+    } else {
+      pending.push(callback);
+    }
+  };
+  const client = new GeniClient('app');
+  client.getPerson('1');
+  client.getPerson('2');
+  expect(Geni.api).toHaveBeenCalledTimes(1);
+
+  jest.advanceTimersByTime(4999);
+  expect(Geni.api).toHaveBeenCalledTimes(1);
+  jest.advanceTimersByTime(1);
+  expect(Geni.api).toHaveBeenCalledTimes(2);
+  expect(Geni.api.mock.calls[1][0]).toBe('/profile-g1');
+
+  // Once the rate limit is over, there is no delay between operations.
+  rateLimited = false;
+  jest.advanceTimersByTime(5000);
+  expect(Geni.api).toHaveBeenCalledTimes(3);
+  pending[0]({ id: 'first' });
+  expect(Geni.api).toHaveBeenCalledTimes(4);
+  expect(Geni.api.mock.calls[3][0]).toBe('/profile-g2');
+});
+
+test('An operation that throws does not block the queue', async () => {
+  let finishFirst;
+  apiHandler = (operation, args, callback) => {
+    if (operation === '/profile-g1') {
+      finishFirst = callback;
+    } else if (operation === '/profile-g2') {
+      throw new Error('boom');
+    } else {
+      callback({ id: operation });
+    }
+  };
+  const client = new GeniClient('app');
+  const first = client.getPerson('1');
+  const second = client.getPerson('2');
+  const third = client.getPerson('3');
+  expect(Geni.api).toHaveBeenCalledTimes(1);
+
+  finishFirst({ id: 'first' });
+  await expect(first).resolves.toEqual({ id: 'first' });
+  await expect(second).rejects.toThrow('boom');
+  await expect(third).resolves.toEqual({ id: '/profile-g3' });
 });
 
 test('queueSizeView reports waiting while rate limited', async () => {
@@ -159,8 +211,6 @@ test('queueSizeView reports waiting while rate limited', async () => {
   rateLimited = false;
   jest.advanceTimersByTime(5000);
   await expect(promise).resolves.toEqual({ ok: true });
-  expect(views.at(-1)).toEqual([1, false]);
-  jest.advanceTimersByTime(5000);
   expect(views.at(-1)).toEqual([0, false]);
 });
 
