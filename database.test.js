@@ -60,3 +60,36 @@ test('createAncestors picks up parent links added after an earlier run', () => {
   expect([...father.ancestors()]).toStrictEqual(['gf']);
   expect([...child.ancestors()].sort()).toStrictEqual(['f', 'gf']);
 });
+
+test('ancestorIds follows parent links that are in the database', () => {
+  const db = new Database();
+  db.addWithAttributes('gf', { name: 'Grandfather' });
+  db.addWithAttributes('f', { name: 'Father', father: 'gf' });
+  // The mother's record is missing, so she is not counted.
+  const child = db.addWithAttributes('c', { name: 'Child', father: 'f',
+                                            mother: 'missing' });
+  db.createAncestors();
+  expect([...db.ancestorIds('c')].sort()).toStrictEqual(['f', 'gf']);
+  expect(db.ancestorIds('c')).toStrictEqual(child.ancestors());
+  expect(db.ancestorIds('gf').size).toBe(0);
+  expect(db.ancestorIds('unknown').size).toBe(0);
+});
+
+test('ancestorIds sees links added after the ancestor sets were built', () => {
+  const db = new Database();
+  db.addWithAttributes('m', { name: 'Mother' });
+  const child = db.addWithAttributes('c', { name: 'Child' });
+  db.createAncestors();
+  child.setMother('m');
+  expect(child.ancestors().size).toBe(0);
+  expect([...db.ancestorIds('c')]).toStrictEqual(['m']);
+});
+
+test('ancestorIds counts shared ancestors once', () => {
+  const db = new Database();
+  db.addWithAttributes('a', { name: 'Shared ancestor' });
+  db.addWithAttributes('f', { name: 'Father', father: 'a' });
+  db.addWithAttributes('m', { name: 'Mother', father: 'a' });
+  db.addWithAttributes('c', { name: 'Child', father: 'f', mother: 'm' });
+  expect([...db.ancestorIds('c')].sort()).toStrictEqual(['a', 'f', 'm']);
+});

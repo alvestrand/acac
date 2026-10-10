@@ -61,6 +61,7 @@ if (errorMessageElement.hidden) {
 
 const client = new GeniClient(geniAppId);
 client.queueSizeView = (number, waiting) => {
+  scheduleRunningCounts();
   if (number === 0) {
     queueSizeElement.innerText = 'Queue empty';
   } else {
@@ -227,8 +228,36 @@ function profileMenu(profile) {
   return select;
 }
 
+// While profiles are being fetched, the ancestor counts in the profile
+// list are updated at most once per second, so that progress is visible.
+// They are worked out from the parent links, since the ancestor sets
+// used for the groups are only rebuilt when fetching is finished.
+const runningCountsInterval = 1000;
+let runningCountsTimer;
+
+function scheduleRunningCounts() {
+  if (runningCountsTimer === undefined) {
+    runningCountsTimer = setTimeout(() => {
+      runningCountsTimer = undefined;
+      displayRunningCounts();
+    }, runningCountsInterval);
+  }
+}
+
+// The cell showing the ancestor count of each profile in the list.
+// Map of Person -> td element.
+let ancestorCountCells = new Map();
+
+// Update the ancestor counts in the profile list without redrawing it.
+function displayRunningCounts() {
+  ancestorCountCells.forEach((cell, profile) => {
+    cell.textContent = db.ancestorIds(profile.id()).size;
+  });
+}
+
 function displayProfileList() {
   profileListElement.innerHTML = '';
+  ancestorCountCells = new Map();
   const table = document.createElement('table');
   const th = document.createElement('tr');
   th.innerHTML = '<tr><th>Name<th>Ancestors<th></tr>';
@@ -241,6 +270,7 @@ function displayProfileList() {
     row.append(n);
     const a = document.createElement('td');
     a.textContent = profile.ancestors().size;
+    ancestorCountCells.set(profile, a);
     row.append(a);
     const m = document.createElement('td');
     m.append(profileMenu(profile));
