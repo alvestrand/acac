@@ -187,6 +187,23 @@ class Database {
     });
     return result;
   }
+  // The ids of all known ancestors of a person, found by following the
+  // father and mother links. Unlike Person.ancestors(), this is always
+  // up to date, but it is worked out again on each call.
+  ancestorIds(id) {
+    const ancestors = new Set();
+    const toVisit = [id];
+    while (toVisit.length > 0) {
+      const person = this.get(toVisit.pop());
+      for (const parentId of [person?.father(), person?.mother()]) {
+        if (parentId && this.get(parentId) && !ancestors.has(parentId)) {
+          ancestors.add(parentId);
+          toVisit.push(parentId);
+        }
+      }
+    }
+    return ancestors;
+  }
   // Build the ancestor sets of all entries from the current parent links.
   // Sets built earlier are rebuilt, since links may have been added since.
   createAncestors() {

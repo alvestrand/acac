@@ -53,22 +53,11 @@ function applyImport(imported, db, groupStore) {
 // The members and all their known ancestors, as Person objects,
 // each person once. Follows the father and mother links in the database.
 function groupPersons(memberIds, db) {
-  const persons = new Map();
-  const toVisit = [...memberIds];
-  while (toVisit.length > 0) {
-    const id = toVisit.shift();
-    const person = db.get(id);
-    if (!person || persons.has(id)) {
-      continue;
-    }
-    persons.set(id, person);
-    for (const parentId of [person.father(), person.mother()]) {
-      if (parentId) {
-        toVisit.push(parentId);
-      }
-    }
+  let ids = new Set(memberIds.filter(id => db.get(id)));
+  for (const id of memberIds) {
+    ids = ids.union(db.ancestorIds(id));
   }
-  return [...persons.values()];
+  return [...ids].map(id => db.get(id));
 }
 
 // Represent a group as a JSON string.
