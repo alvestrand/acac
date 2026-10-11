@@ -181,6 +181,13 @@ class GeniClient {
     });
   }
 
+  // Geni also has a profile/ancestors call, returning 5 generations of
+  // ancestors at once. It is not used, because Geni only allows it for
+  // the logged-in user's own profile, and answers "Permission denied"
+  // for any other, including the user's ancestors and profiles the user
+  // manages. Its generations parameter fails with "comparison of Integer
+  // with String failed", whether given as a number or as text.
+
   async getUnions(unions) {
     return new Promise((resolve, reject) => {
       const op = new GeniOperation('/union', {ids: unions},

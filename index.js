@@ -311,18 +311,20 @@ async function addProfile() {
   if (addProfileElement.value.trim() === '') {
     return;
   }
+  // Pressing the Add button can trigger both a change and a click event,
+  // so ignore a second add of the profile being added.
+  const guid = isolateId(addProfileElement.value.trim());
+  if (guid === profileBeingFetched) {
+    console.log('addProfile called twice on', guid, ', ignoring');
+    return;
+  }
+  profileBeingFetched = guid;
   startTreeBuild();
   try {
     if (!client.connected) {
       await connectToGeni();
     }
-    const guid = isolateId(addProfileElement.value.trim());
-    if (guid === profileBeingFetched) {
-      console.log('addProfile called twice on', guid, ', ignoring');
-      return;
-    }
     addProfileMessage.innerText = 'Fetching id ' + guid;
-    profileBeingFetched = guid;
     const stored = db.get(guid);
     let fetched;
     if (stored) {
@@ -333,10 +335,6 @@ async function addProfile() {
         addProfileMessage.innerText = stored.name() + ' already in DB';
         if (addNameToProfileList(stored)) {
           addProfileElement.value = '';
-          if (!('parents' in stored)) {
-            console.log('Getting parents of stored profile', stored.guid());
-            await addParents(stored);
-          }
           console.log('Building tree for added person', stored.name());
           addProfileMessage.innerText = 'Building tree for ' + stored.name();
           await buildTreeForPerson(stored, 2025, Number(yearLimitElement.value));
@@ -364,7 +362,6 @@ async function addProfile() {
     const person = db.addWithAttributes(fetched.guid, fetched);
     addNameToProfileList(person);
     addProfileElement.value = '';
-    await addParents(person);
     console.log('Building tree for added person', person.name());
     addProfileMessage.innerText = 'Building tree for ' + person.name();
     await buildTreeForPerson(person, 2025, Number(yearLimitElement.value));
@@ -372,9 +369,11 @@ async function addProfile() {
     addProfileMessage.innerText = treeBuildingResult(person);
   } catch (error) {
     console.log('Add failed, message ', error);
-    addProfileMessage.innerText = 'Add failed, error ' + JSON.stringify(error);
+    addProfileMessage.innerText = 'Add failed, error '
+      + (error?.message ?? JSON.stringify(error));
     return;
   } finally {
+    profileBeingFetched = undefined;
     finishTreeBuild();
   }
 }
@@ -389,8 +388,6 @@ async function addProfileByUrl(url) {
     }
     const person = db.addWithAttributes(fetched.guid, fetched);
     console.log('Added', person.name());
-    await addParents(person);
-    console.log('Added parents for ', person.name());
     return person;
   } catch (error) {
     console.log('AddProfileByUrl failed, message ', error);
@@ -476,10 +473,10 @@ async function buildTreeForPerson(person, birthYearAssumption, yearLimit) {
     console.log(`${person.name()} seems born in ${birthYear} - not looking`);
     return;
   }
-  if (!('parents' in person) || person.parents === undefined) {
+  if (person.parents === undefined) {
     await addParents(person);
   }
-  if (!('parents' in person) || person.parents === undefined) {
+  if (person.parents === undefined) {
     console.log('Could not fetch parents for ', person.name());
     return;
   }
