@@ -223,3 +223,49 @@ test('queueSizeView does not report waiting for a normal queue', () => {
   client.getPerson('2');
   expect(views).toEqual([[1, false], [2, false]]);
 });
+
+test('stop rejects queued operations and ignores the running one',
+     async () => {
+  const pending = [];
+  apiHandler = (operation, args, callback) => pending.push(callback);
+  const client = new GeniClient('app');
+  const views = [];
+  client.queueSizeView = (size, waiting) => views.push([size, waiting]);
+  const first = client.getPerson('1');
+  const second = client.getPerson('2');
+
+  client.stop();
+  expect(client.stopped).toBe(true);
+  await expect(first).rejects.toThrow('Fetching stopped');
+  await expect(second).rejects.toThrow('Fetching stopped');
+  expect(views.at(-1)).toEqual([0, false]);
+
+  // The answer to the running operation arrives later and is ignored.
+  pending[0]({ id: 'late' });
+  expect(Geni.api).toHaveBeenCalledTimes(1);
+  expect(views.at(-1)).toEqual([0, false]);
+});
+
+test('stop rejects new operations until start', async () => {
+  const client = new GeniClient('app');
+  client.stop();
+  await expect(client.getPerson('1')).rejects.toThrow('Fetching stopped');
+  expect(Geni.api).not.toHaveBeenCalled();
+
+  client.start();
+  expect(client.stopped).toBe(false);
+  await expect(client.getPerson('2')).resolves.toEqual({});
+  expect(Geni.api).toHaveBeenCalledTimes(1);
+});
+
+test('stop cancels a pending rate limit retry', async () => {
+  apiHandler = (operation, args, callback) =>
+    callback({ error: { type: 'ApiException',
+                        message: 'Rate limit exceeded.' } });
+  const client = new GeniClient('app');
+  const promise = client.getPerson('1');
+  client.stop();
+  await expect(promise).rejects.toThrow('Fetching stopped');
+  jest.advanceTimersByTime(10000);
+  expect(Geni.api).toHaveBeenCalledTimes(1);
+});
