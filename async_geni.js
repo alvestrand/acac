@@ -16,6 +16,8 @@ class GeniOperation {
     this.args = args;
     this.resolve = resolve;
     this.reject = reject;
+    // Set when the client stops fetching. Geni's answer is then ignored.
+    this.cancelled = false;
   }
 
   // Run the operation. Calls done with 'rateLimited' when Geni says the
@@ -28,6 +30,9 @@ class GeniOperation {
       // Geni modifies the args argument, so clone it.
       const args = structuredClone(this.args);
       Geni.api(this.operation, args, data => {
+        if (this.cancelled) {
+          return;
+        }
         if (data.error) {
           if (data.error.type == 'ApiException'
               && data.error.message == 'Rate limit exceeded.') {
@@ -57,6 +62,10 @@ class GeniClient {
   // True from when Geni says the rate limit is exceeded until
   // an operation gets another answer.
   #rateLimited = false;
+  // Timer for retrying an operation after the rate limit was exceeded.
+  #retryTimer;
+  // True after stop(), until start().
+  #stopped = false;
 
   constructor(appId) {
     this.connected = false;
@@ -74,6 +83,10 @@ class GeniClient {
   // Add an operation to the queue, starting it at once if nothing
   // else is running.
   #enqueue(op) {
+    if (this.#stopped) {
+      op.reject(new Error('Fetching stopped'));
+      return;
+    }
     this.#operationQueue.push(op);
     if (this.#operationQueue.length === 1) {
       this.#execute(op);
@@ -87,7 +100,10 @@ class GeniClient {
     op.execute(outcome => {
       if (outcome === 'rateLimited') {
         this.#rateLimited = true;
-        setTimeout(() => this.#execute(op), rateLimitRetryDelay);
+        this.#retryTimer = setTimeout(() => {
+          this.#retryTimer = undefined;
+          this.#execute(op);
+        }, rateLimitRetryDelay);
       } else {
         if (outcome === 'answered') {
           this.#rateLimited = false;
@@ -99,6 +115,32 @@ class GeniClient {
       }
       this.#showQueueSize();
     });
+  }
+
+  // Stop fetching: reject all queued operations, ignore the answer to
+  // the one that is running, and reject new operations until start()
+  // is called. Rejected operations get an Error 'Fetching stopped'.
+  stop() {
+    this.#stopped = true;
+    clearTimeout(this.#retryTimer);
+    this.#retryTimer = undefined;
+    const operations = this.#operationQueue;
+    this.#operationQueue = [];
+    this.#rateLimited = false;
+    for (const op of operations) {
+      op.cancelled = true;
+      op.reject(new Error('Fetching stopped'));
+    }
+    this.#showQueueSize();
+  }
+
+  // Accept new operations again after stop().
+  start() {
+    this.#stopped = false;
+  }
+
+  get stopped() {
+    return this.#stopped;
   }
 
   #showQueueSize() {
@@ -138,6 +180,13 @@ class GeniClient {
       this.#enqueue(op);
     });
   }
+
+  // Geni also has a profile/ancestors call, returning 5 generations of
+  // ancestors at once. It is not used, because Geni only allows it for
+  // the logged-in user's own profile, and answers "Permission denied"
+  // for any other, including the user's ancestors and profiles the user
+  // manages. Its generations parameter fails with "comparison of Integer
+  // with String failed", whether given as a number or as text.
 
   async getUnions(unions) {
     return new Promise((resolve, reject) => {

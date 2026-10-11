@@ -111,6 +111,7 @@ const exportFileButton = document.getElementById('export-file');
 const importFileButton = document.getElementById('import-file');
 const importFileInput = document.getElementById('import-file-input');
 const buildTreeButton = document.getElementById('build-tree');
+const stopFetchingButton = document.getElementById('stop-fetching');
 const yearLimitElement = document.getElementById('year-limit');
 const recalculateGroupsButton = document.getElementById('recalculate-groups');
 const groupListElement = document.getElementById('group-list');
@@ -301,21 +302,29 @@ function removeFromProfileList(profile) {
 
 let profileBeingFetched;
 
+function treeBuildingResult(person) {
+  return (client.stopped ? 'Stopped' : 'Finished') + ' tree building for '
+    + person.name();
+}
+
 async function addProfile() {
   if (addProfileElement.value.trim() === '') {
     return;
   }
+  // Pressing the Add button can trigger both a change and a click event,
+  // so ignore a second add of the profile being added.
+  const guid = isolateId(addProfileElement.value.trim());
+  if (guid === profileBeingFetched) {
+    console.log('addProfile called twice on', guid, ', ignoring');
+    return;
+  }
+  profileBeingFetched = guid;
+  startTreeBuild();
   try {
     if (!client.connected) {
       await connectToGeni();
     }
-    const guid = isolateId(addProfileElement.value.trim());
-    if (guid === profileBeingFetched) {
-      console.log('addProfile called twice on', guid, ', ignoring');
-      return;
-    }
     addProfileMessage.innerText = 'Fetching id ' + guid;
-    profileBeingFetched = guid;
     const stored = db.get(guid);
     let fetched;
     if (stored) {
@@ -326,15 +335,11 @@ async function addProfile() {
         addProfileMessage.innerText = stored.name() + ' already in DB';
         if (addNameToProfileList(stored)) {
           addProfileElement.value = '';
-          if (!('parents' in stored)) {
-            console.log('Getting parents of stored profile', stored.guid());
-            await addParents(stored);
-          }
           console.log('Building tree for added person', stored.name());
           addProfileMessage.innerText = 'Building tree for ' + stored.name();
           await buildTreeForPerson(stored, 2025, Number(yearLimitElement.value));
           buildAncestorGroups();
-          addProfileMessage.innerText = 'Finished tree building for ' + stored.name();
+          addProfileMessage.innerText = treeBuildingResult(stored);
           return;
         }
       }
@@ -357,16 +362,19 @@ async function addProfile() {
     const person = db.addWithAttributes(fetched.guid, fetched);
     addNameToProfileList(person);
     addProfileElement.value = '';
-    await addParents(person);
     console.log('Building tree for added person', person.name());
     addProfileMessage.innerText = 'Building tree for ' + person.name();
     await buildTreeForPerson(person, 2025, Number(yearLimitElement.value));
     buildAncestorGroups();
-    addProfileMessage.innerText = 'Finished tree building for ' + person.name();
+    addProfileMessage.innerText = treeBuildingResult(person);
   } catch (error) {
     console.log('Add failed, message ', error);
-    addProfileMessage.innerText = 'Add failed, error ' + JSON.stringify(error);
+    addProfileMessage.innerText = 'Add failed, error '
+      + (error?.message ?? JSON.stringify(error));
     return;
+  } finally {
+    profileBeingFetched = undefined;
+    finishTreeBuild();
   }
 }
 
@@ -380,8 +388,6 @@ async function addProfileByUrl(url) {
     }
     const person = db.addWithAttributes(fetched.guid, fetched);
     console.log('Added', person.name());
-    await addParents(person);
-    console.log('Added parents for ', person.name());
     return person;
   } catch (error) {
     console.log('AddProfileByUrl failed, message ', error);
@@ -432,9 +438,27 @@ async function addParents(person) {
   person.parents = parents;
 }
 
-let building = false;
+// Number of tree builds running, from the Build tree or the Add button.
+// The Build tree button is disabled while any is running.
+let treeBuildsRunning = 0;
+
+function startTreeBuild() {
+  treeBuildsRunning++;
+  buildTreeButton.disabled = true;
+  client.start();
+}
+
+function finishTreeBuild() {
+  treeBuildsRunning--;
+  if (treeBuildsRunning === 0) {
+    buildTreeButton.disabled = false;
+  }
+}
 
 async function buildTreeForPerson(person, birthYearAssumption, yearLimit) {
+  if (client.stopped) {
+    return;
+  }
   if (!person) {
     console.log('Error: Called with no person');
     return;
@@ -449,10 +473,10 @@ async function buildTreeForPerson(person, birthYearAssumption, yearLimit) {
     console.log(`${person.name()} seems born in ${birthYear} - not looking`);
     return;
   }
-  if (!('parents' in person) || person.parents === undefined) {
+  if (person.parents === undefined) {
     await addParents(person);
   }
-  if (!('parents' in person) || person.parents === undefined) {
+  if (person.parents === undefined) {
     console.log('Could not fetch parents for ', person.name());
     return;
   }
@@ -498,6 +522,10 @@ async function buildTreeForPerson(person, birthYearAssumption, yearLimit) {
 async function buildTree(yearLimit) {
   await connectToGeni();
   for (const person of profileList) {
+    if (client.stopped) {
+      console.log('Tree build stopped');
+      break;
+    }
     console.log('Starting tree for root person', person.name());
     await buildTreeForPerson(person, 2025, yearLimit);
   }
@@ -696,16 +724,16 @@ importFileInput.addEventListener('change', async () => {
 });
 
 buildTreeButton.addEventListener('click', async () => {
-  if (!building) {
-    building = true;
-    buildTreeButton.innerText = 'Stop build';
+  startTreeBuild();
+  try {
     await buildTree(Number(yearLimitElement.value));
-    buildTreeButton.innerText = 'Build tree';
-    building = false;
-  } else {
-    building = false;
-    buildTreeButton.innerText = 'Build tree';
+  } finally {
+    finishTreeBuild();
   }
+});
+
+stopFetchingButton.addEventListener('click', () => {
+  client.stop();
 });
 
 recalculateGroupsButton.addEventListener('click', () => {

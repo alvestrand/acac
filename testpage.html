@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <link rel="stylesheet" href="index.css">
+  <title>ACAC test page</title>
+</head>
+<body>
+  <script src="https://geni.com/jsdk.js"></script>
+  <h1>ACAC test page</h1>
+  <p>
+    Runs one Geni API call on its own, outside the request queue, and
+    shows exactly what was sent and what came back.
+  </p>
+  <p>
+    Examples, as used by the main page:
+    path <code>/profile-g6000000003987799076</code> with parameters
+    <code>{}</code> fetches a profile by guid;
+    path <code>/union</code> with parameters
+    <code>{"ids": ["19647660", "12660231"]}</code> fetches several unions.
+  </p>
+  <p>
+    Path:<br/>
+    <input type="text" id="path" size="80"
+           value="/profile-g6000000003987799076"></input>
+  </p>
+  <p>
+    Parameters (JSON):<br/>
+    <textarea id="params" rows="4" cols="80">{}</textarea>
+  </p>
+  <button id="run-request">Run request</button>
+  <h2>Request</h2>
+  <pre id="request"></pre>
+  <h2>Answer</h2>
+  <pre id="answer"></pre>
+
+  <script type="module">
+    const pathElement = document.getElementById('path');
+    const paramsElement = document.getElementById('params');
+    const requestElement = document.getElementById('request');
+    const answerElement = document.getElementById('answer');
+
+    const response = await fetch('.geni_app_id');
+    if (!response.ok) {
+      answerElement.textContent = 'Could not read .geni_app_id: '
+        + response.status;
+      throw new Error('No Geni app id');
+    }
+    const appId = (await response.text()).trim();
+    Geni.init({ app_id: appId, cookie: true, logging: true });
+
+    // Connect once per page load, like GeniClient.connect.
+    // Resolves with the connect status, or 'no status' if Geni
+    // gave none.
+    let connected = false;
+    function connect() {
+      return new Promise((resolve, reject) => {
+        if (connected) {
+          resolve('already connected');
+          return;
+        }
+        Geni.connect(response => {
+          if (response === undefined) {
+            resolve('no status');
+          } else if (response.status == 'authorized') {
+            connected = true;
+            resolve(response.status);
+          } else {
+            reject('Connect failed, status is ' + response.status);
+          }
+        });
+      });
+    }
+
+    document.getElementById('run-request').addEventListener(
+      'click', async () => {
+        let params;
+        try {
+          params = JSON.parse(paramsElement.value);
+        } catch (error) {
+          requestElement.textContent = '';
+          answerElement.textContent = 'Parameters are not valid JSON: '
+            + error.message;
+          return;
+        }
+        const path = pathElement.value.trim();
+        requestElement.textContent = JSON.stringify(
+          { appId: appId, path: path, params: params }, null, 2);
+        answerElement.textContent = 'Connecting…';
+        let status;
+        try {
+          status = await connect();
+          answerElement.textContent = 'Connected (' + status
+            + '), waiting for answer…';
+        } catch (error) {
+          answerElement.textContent = String(error);
+          return;
+        }
+        const started = Date.now();
+        // Geni modifies the params argument, so pass a copy.
+        Geni.api(path, structuredClone(params), data => {
+          answerElement.textContent = 'Connected (' + status + ').\n'
+            + 'Answer after ' + (Date.now() - started) + ' ms:\n'
+            + JSON.stringify(data, null, 2);
+        });
+      });
+  </script>
+</body>
+</html>
