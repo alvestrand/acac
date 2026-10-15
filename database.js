@@ -7,6 +7,9 @@ class Person {
   #personRecord;
   // Ancestors, derived from Geni lookups. Set of string.
   #ancestors;
+  // Generations back to each ancestor (1 for parents), by the shortest
+  // path. Map of string -> number, with the same keys as #ancestors.
+  #ancestorGenerations;
   // ID of father and mother entry
   #father;
   #mother;
@@ -93,26 +96,42 @@ class Person {
       if (mother) {
         mother.addAncestors(db);
       }
-      this.#ancestors = new Set();
-      if (father) {
-        this.#ancestors = this.#ancestors.union(father.#ancestors);
-        this.#ancestors.add(father.id());
+      this.#ancestorGenerations = new Map();
+      for (const parent of [father, mother]) {
+        if (parent) {
+          this.#addAncestorGeneration(parent.id(), 1);
+          parent.#ancestorGenerations.forEach((generations, id) => {
+            this.#addAncestorGeneration(id, generations + 1);
+          });
+        }
       }
-      if (mother) {
-        this.#ancestors = this.#ancestors.union(mother.#ancestors);
-        this.#ancestors.add(mother.id());
-      }
+      this.#ancestors = new Set(this.#ancestorGenerations.keys());
+    }
+  }
+  // Record an ancestor, keeping the shortest path if it is already known.
+  #addAncestorGeneration(id, generations) {
+    const known = this.#ancestorGenerations.get(id);
+    if (known === undefined || generations < known) {
+      this.#ancestorGenerations.set(id, generations);
     }
   }
   // Forget the set of ancestors, so that addAncestors builds it again.
   clearAncestors() {
     this.#ancestors = undefined;
+    this.#ancestorGenerations = undefined;
   }
   ancestors() {
     if (this.#ancestors === undefined) {
       return new Set();
     }
     return this.#ancestors;
+  }
+  // Map of ancestor id -> generations back, as built by addAncestors.
+  ancestorGenerations() {
+    if (this.#ancestorGenerations === undefined) {
+      return new Map();
+    }
+    return this.#ancestorGenerations;
   }
 }
 

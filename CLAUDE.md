@@ -46,7 +46,10 @@ is fetched with the user's Geni login and cached in the browser.
 - `geni_structures.js`: knowledge of Geni's data formats
   (`resolveParents` picks the birth union from a union list).
 - `ancestor_finder.js`: groups profiles by shared ancestors
-  (`makeGroupList`, `removeInnerParents`).
+  (`makeGroupList`, `removeInnerParents`). `makeGroupList` takes one of
+  `scoringAlgorithms` as its second argument (default `sharedAncestors`);
+  the scores use `Person.ancestorGenerations()` (generations back to each
+  ancestor, built by `createAncestors()`).
 - `groups.js`: `GroupStore`, groups of member ids in localStorage.
 - `file_export.js`: save/load of the whole database, and of a single
   group with its members' ancestors (merge rule: replace a person only if

@@ -1,6 +1,7 @@
 // Algorithm for finding common ancestors.
 
 export {
+  scoringAlgorithms,
   makeGroupList,
   removeInnerParents
 };
@@ -9,31 +10,71 @@ class CommonAncestorGroup {
   constructor(rootPerson) {
     this.persons = [ rootPerson ];
     this.ancestors = new Set(rootPerson.ancestors());
+    // Generations back from the farthest member to each common ancestor.
+    this.generations = new Map(rootPerson.ancestorGenerations());
   }
   mergeGroup(group) {
     this.persons.push(...group.persons);
     this.ancestors = this.ancestors.intersection(group.ancestors);
+    const generations = new Map();
+    for (const id of this.ancestors) {
+      generations.set(id, Math.max(this.generations.get(id),
+                                   group.generations.get(id)));
+    }
+    this.generations = generations;
   }
 }
 
-function mergeOverlappingGroups(groupList) {
-  // Find the two groups with the most ancestors in common, and merge them.
+// Ways of scoring how closely two groups are related. makeGroupList
+// merges the pair with the highest score, as long as it is above zero.
+// Each takes two CommonAncestorGroups and returns a number.
+const scoringAlgorithms = {
+  // The number of common ancestors. Favours members with deep trees.
+  sharedAncestors(group1, group2) {
+    return group1.ancestors.intersection(group2.ancestors).size;
+  },
+  // Each common ancestor counts 2^-(g1 + g2), where g1 and g2 are the
+  // generations back from each group, so close relatives count far more
+  // than many distant ancestors. Close to the kinship coefficient, but it
+  // uses only the shortest path, and also counts the ancestors of the
+  // closest common ancestors.
+  kinship(group1, group2) {
+    let score = 0;
+    for (const id of group1.ancestors.intersection(group2.ancestors)) {
+      score += 2 ** -(group1.generations.get(id) + group2.generations.get(id));
+    }
+    return score;
+  },
+  // Only the closest common ancestor counts: 2^-(g1 + g2) for the
+  // ancestor with the smallest g1 + g2.
+  closestAncestor(group1, group2) {
+    let score = 0;
+    for (const id of group1.ancestors.intersection(group2.ancestors)) {
+      score = Math.max(score, 2 ** -(group1.generations.get(id)
+                                     + group2.generations.get(id)));
+    }
+    return score;
+  }
+};
+
+function mergeOverlappingGroups(groupList, score) {
+  // Find the two groups with the highest score, and merge them.
   let firstGroup;
   let secondGroup;
-  let maxMatch = 0;
+  let maxScore = 0;
   groupList.forEach(entry1 => {
     groupList.forEach(entry2 => {
       if (entry1 != entry2) {
-        const overlap = entry1.ancestors.intersection(entry2.ancestors).size;
-        if (overlap > maxMatch) {
+        const pairScore = score(entry1, entry2);
+        if (pairScore > maxScore) {
           firstGroup = entry1;
           secondGroup = entry2;
-          maxMatch = overlap;
+          maxScore = pairScore;
         }
       }
     });
   });
-  if (maxMatch === 0) {
+  if (maxScore === 0) {
     return groupList;  // No change
   }
   console.log('Merging', firstGroup.persons[0].name(), 'with', secondGroup.persons[0].name());
@@ -42,14 +83,16 @@ function mergeOverlappingGroups(groupList) {
   return newGroupList;
 }
 
-// Start with one group per person, and merge the groups with the most
-// ancestors in common until no two groups share any ancestor.
-function makeGroupList(personList) {
+// Start with one group per person, and merge the highest scoring pair
+// of groups until no two groups share any ancestor. The score is one of
+// scoringAlgorithms, so that they can be compared on the same data.
+function makeGroupList(personList,
+                       score = scoringAlgorithms.sharedAncestors) {
   let groupList = personList.map(person => new CommonAncestorGroup(person));
   let currentSize = groupList.length;
   while (true) {
     console.log('Group list length is ', currentSize);
-    groupList = mergeOverlappingGroups(groupList);
+    groupList = mergeOverlappingGroups(groupList, score);
     if (currentSize == groupList.length) {
       return groupList;
     }
