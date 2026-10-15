@@ -1,8 +1,6 @@
 // Algorithm for finding common ancestors.
 
 export {
-  CommonAncestorGroup,
-  mergeWithSomeGroup,
   makeGroupList,
   removeInnerParents
 };
@@ -12,53 +10,10 @@ class CommonAncestorGroup {
     this.persons = [ rootPerson ];
     this.ancestors = new Set(rootPerson.ancestors());
   }
-  sizeAfterMerge(person) {
-    return this.ancestors.intersection(person.ancestors()).size;
-  }
-  mergePerson(person) {
-    this.persons.push(person);
-    this.ancestors = this.ancestors.intersection(person.ancestors());
-  }
   mergeGroup(group) {
     this.persons.push(...group.persons);
     this.ancestors = this.ancestors.intersection(group.ancestors);
   }
-}
-
-function mergeWithSomeGroup(person, groupList) {
-  // find the group that will reduce the least by merging this.
-  // This will hopefully merge close relatives in the same group.
-  const new_sizes = groupList.map(entry => entry.sizeAfterMerge(person));
-  let smallestShrinkage = Number.MAX_SAFE_INTEGER;
-  let chosenGroup;
-  console.log(`Grouping ${person.name()}, new sizes`, new_sizes);
-  for (let idx = 0; idx < new_sizes.length; idx++) {
-    if (new_sizes[idx] > 0) {
-      const shrinkage = groupList[idx].ancestors.size - new_sizes[idx];
-      if (shrinkage < smallestShrinkage) {
-        smallestShrinkage = shrinkage;
-        chosenGroup = idx;
-      }
-    }
-  }
-  console.log('Smallest shrinkage', smallestShrinkage,
-              'chosen group', chosenGroup);
-  if (chosenGroup === undefined) {
-    // No groups, or all groups resolve to zero. Add one.
-    const newGroup = new CommonAncestorGroup(person);
-    groupList.push(newGroup);
-  } else {
-    groupList[chosenGroup].mergePerson(person);
-  }
-}
-
-// First attempt
-function makeGroupList1(personList) {
-  let groupList = new Array();
-  personList.map(person => {
-    mergeWithSomeGroup(person, groupList);
-  });
-  return groupList;
 }
 
 function mergeOverlappingGroups(groupList) {
@@ -87,7 +42,8 @@ function mergeOverlappingGroups(groupList) {
   return newGroupList;
 }
 
-// Second attempt
+// Start with one group per person, and merge the groups with the most
+// ancestors in common until no two groups share any ancestor.
 function makeGroupList(personList) {
   let groupList = personList.map(person => new CommonAncestorGroup(person));
   let currentSize = groupList.length;

@@ -11,8 +11,6 @@ import { exportToJsonString,
          parseGroupExport,
          mergeGroupImport } from './file_export.js';
 import {
-  CommonAncestorGroup,
-  mergeWithSomeGroup,
   makeGroupList,
   removeInnerParents
 } from './ancestor_finder.js';
