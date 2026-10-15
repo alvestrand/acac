@@ -50,6 +50,9 @@ is fetched with the user's Geni login and cached in the browser.
   `scoringAlgorithms` as its second argument (default `sharedAncestors`);
   the scores use `Person.ancestorGenerations()` (generations back to each
   ancestor, built by `createAncestors()`).
+- `tools/count_groups.js`: run by hand (`node tools/count_groups.js
+  [file] [--algorithm=a,b] [--verbose]`) to compare the scoring
+  algorithms on a saved database, by default `samples/database.json`.
 - `groups.js`: `GroupStore`, groups of member ids in localStorage.
 - `file_export.js`: save/load of the whole database, and of a single
   group with its members' ancestors (merge rule: replace a person only if
