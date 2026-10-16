@@ -455,8 +455,11 @@ function finishTreeBuild() {
   }
 }
 
-async function buildTreeForPerson(person, birthYearAssumption, yearLimit) {
-  if (client.stopped) {
+// Fetch the ancestors of person born in yearLimit or later. If
+// generations is given, stop after that many generations as well.
+async function buildTreeForPerson(person, birthYearAssumption, yearLimit,
+                                  generations = Infinity) {
+  if (client.stopped || generations <= 0) {
     return;
   }
   if (!person) {
@@ -506,7 +509,8 @@ async function buildTreeForPerson(person, birthYearAssumption, yearLimit) {
       const fetched = await client.getPerson(person.father());
       dbFather = db.addWithAttributes(fetched.guid, fetched);
     }
-    await buildTreeForPerson(dbFather, birthYear - 30, yearLimit);
+    await buildTreeForPerson(dbFather, birthYear - 30, yearLimit,
+                             generations - 1);
   }
   if (person.mother()) {
     let dbMother = db.get(person.mother());
@@ -515,7 +519,8 @@ async function buildTreeForPerson(person, birthYearAssumption, yearLimit) {
       const fetched = await client.getPerson(person.mother());
       dbMother = db.addWithAttributes(fetched.guid, fetched);
     }
-    await buildTreeForPerson(dbMother, birthYear - 30, yearLimit);
+    await buildTreeForPerson(dbMother, birthYear - 30, yearLimit,
+                             generations - 1);
   }
 }
 
@@ -531,6 +536,52 @@ async function buildTree(yearLimit) {
   }
   console.log('Tree build finished, computing ancestor groups');
   buildAncestorGroups();
+}
+
+// Ancestors with fewer known ancestors than this get a link in the
+// group list for fetching more of them.
+const fewAncestors = 4;
+const extraGenerations = 2;
+
+// Fetch extraGenerations of ancestors for person, regardless of the
+// "back to" year limit, and recalculate the groups.
+async function fetchMoreAncestors(person) {
+  startTreeBuild();
+  try {
+    if (!client.connected) {
+      await connectToGeni();
+    }
+    addProfileMessage.innerText = 'Fetching ancestors of ' + person.name();
+    await buildTreeForPerson(person, 2025, -Infinity, extraGenerations);
+    buildAncestorGroups();
+    addProfileMessage.innerText = treeBuildingResult(person);
+  } catch (error) {
+    console.log('Fetching ancestors failed, message ', error);
+    addProfileMessage.innerText = 'Fetching ancestors failed, error '
+      + (error?.message ?? JSON.stringify(error));
+  } finally {
+    finishTreeBuild();
+  }
+}
+
+// The ancestor count of person in [], as a link that fetches more
+// ancestors if there are few.
+function ancestorCount(person) {
+  const count = person.ancestors().size;
+  if (count >= fewAncestors) {
+    return document.createTextNode(`[${count}]`);
+  }
+  const span = document.createElement('span');
+  const link = document.createElement('a');
+  link.href = '#';
+  link.title = `Fetch ${extraGenerations} generations of ancestors`;
+  link.textContent = count;
+  link.addEventListener('click', event => {
+    event.preventDefault();
+    fetchMoreAncestors(person);
+  });
+  span.append('[', link, ']');
+  return span;
 }
 
 // Grouping algorithm menu ==========================================
@@ -568,7 +619,8 @@ function buildAncestorGroups() {
 function displayAncestorGroups() {
   const dl = document.createElement('dl');
 
-  ancestorGroups.forEach(item => {
+  // People who share no ancestors with anyone are left out.
+  ancestorGroups.filter(item => item.persons.length > 1).forEach(item => {
     const dt = document.createElement('dt');
     const personArray = item.persons.map(person => person.name());
     personArray.forEach(personName => {
@@ -576,16 +628,14 @@ function displayAncestorGroups() {
       dt.appendChild(document.createElement('br'));
     });
     const dd = document.createElement('dd');
-    if (item.persons.length > 1) {
-      const significantAncestors = removeInnerParents(db, item.ancestors);
-      significantAncestors.forEach(ancestor => {
-        dd.appendChild(profileLink(ancestor));
-        dd.appendChild(document.createTextNode(' (' + ancestor.birth() + ')'));
-        dd.appendChild(document.createElement('br'));
-      });
-    } else {
-      dd.textContent = `${item.ancestors.size} ancestors`;
-    }
+    const significantAncestors = removeInnerParents(db, item.ancestors);
+    significantAncestors.forEach(ancestor => {
+      dd.appendChild(profileLink(ancestor));
+      dd.appendChild(document.createTextNode(
+        ' (' + ancestor.birth() + ') '));
+      dd.appendChild(ancestorCount(ancestor));
+      dd.appendChild(document.createElement('br'));
+    });
 
     dl.appendChild(dt);
     dl.appendChild(dd);
