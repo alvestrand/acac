@@ -2,7 +2,9 @@
 
 export {
   scoringAlgorithms,
+  groupingAlgorithms,
   makeGroupList,
+  makeRootDescendantGroups,
   removeInnerParents
 };
 
@@ -99,6 +101,58 @@ function makeGroupList(personList,
     currentSize = groupList.length;
   }
 }
+
+// Look at the ancestors who have no known ancestors themselves (the
+// roots of the trees), and make a group of the persons descending from
+// the root with the most descendants among them. Repeat with the persons
+// not yet grouped, until no root has more than one descendant left.
+// Those left over get a group each, as in makeGroupList.
+// Ties go to the root found first.
+function makeRootDescendantGroups(personList, db) {
+  const groupList = [];
+  let remaining = personList;
+  while (true) {
+    const descendants = new Map();  // root id -> [person]
+    for (const person of remaining) {
+      for (const id of person.ancestors()) {
+        if (db.get(id).ancestors().size === 0) {
+          if (!descendants.has(id)) {
+            descendants.set(id, []);
+          }
+          descendants.get(id).push(person);
+        }
+      }
+    }
+    let members = [];
+    for (const persons of descendants.values()) {
+      if (persons.length > members.length) {
+        members = persons;
+      }
+    }
+    if (members.length < 2) {
+      break;
+    }
+    const group = new CommonAncestorGroup(members[0]);
+    members.slice(1).forEach(
+      person => group.mergeGroup(new CommonAncestorGroup(person)));
+    groupList.push(group);
+    remaining = remaining.filter(person => !members.includes(person));
+  }
+  return groupList.concat(
+    remaining.map(person => new CommonAncestorGroup(person)));
+}
+
+// All ways of making the group list, by name, for the user to choose
+// between. Each takes a list of persons and the database they are in,
+// and returns a list of CommonAncestorGroups.
+const groupingAlgorithms = {
+  sharedAncestors: persons =>
+    makeGroupList(persons, scoringAlgorithms.sharedAncestors),
+  kinship: persons => makeGroupList(persons, scoringAlgorithms.kinship),
+  closestAncestor: persons =>
+    makeGroupList(persons, scoringAlgorithms.closestAncestor),
+  rootDescendants: makeRootDescendantGroups
+};
 
 // Takes a Set(ancestor id) and removes
 // those people who have children in the set.
