@@ -270,16 +270,81 @@ function displayRunningCounts() {
   });
 }
 
+// Ways of sorting the profile list, chosen by clicking a column heading.
+// Each gives a sort key: names A to Z, most complete generations first.
+// Only the display is sorted; profileList keeps its order.
+const profileSortKeys = {
+  name: profile => profile.name() ?? '',
+  generations: (profile, memo) => -db.completenessIndex(profile.id(), memo)
+};
+// The column the list is sorted on, or undefined for the order added.
+// Clicking the same heading again reverses the order.
+let profileSortColumn;
+let profileSortReversed = false;
+
+function sortProfileList(column) {
+  if (profileSortColumn === column) {
+    profileSortReversed = !profileSortReversed;
+  } else {
+    profileSortColumn = column;
+    profileSortReversed = false;
+  }
+  displayProfileList();
+}
+
+function sortedProfileList() {
+  if (profileSortColumn === undefined) {
+    return profileList;
+  }
+  const memo = new Map();
+  const key = profileSortKeys[profileSortColumn];
+  const keys = new Map(profileList.map(
+    profile => [profile, key(profile, memo)]));
+  const direction = profileSortReversed ? -1 : 1;
+  return profileList.toSorted((a, b) => {
+    const keyA = keys.get(a);
+    const keyB = keys.get(b);
+    const order = typeof keyA === 'string'
+      ? keyA.localeCompare(keyB) : keyA - keyB;
+    return direction * order;
+  });
+}
+
+// A column heading that sorts the list on column when clicked.
+function sortHeading(text, column) {
+  const th = document.createElement('th');
+  const link = document.createElement('a');
+  link.href = '#';
+  link.textContent = text;
+  if (profileSortColumn === column) {
+    link.textContent += profileSortReversed ? ' \u25b2' : ' \u25bc';
+  }
+  link.title = 'Sort on this column; click again to reverse';
+  link.addEventListener('click', event => {
+    event.preventDefault();
+    sortProfileList(column);
+  });
+  th.append(link);
+  return th;
+}
+
 function displayProfileList() {
   profileListElement.innerHTML = '';
   ancestorCountCells = new Map();
   completenessCells = new Map();
   const table = document.createElement('table');
   const th = document.createElement('tr');
-  th.innerHTML = '<tr><th>Name<th>Ancestors<th>Generations<th></tr>';
+  const ancestorsHeading = document.createElement('th');
+  ancestorsHeading.textContent = 'Ancestors';
+  th.append(sortHeading('Name', 'name'), ancestorsHeading,
+            sortHeading('Generations', 'generations'),
+            document.createElement('th'));
   table.append(th);
 
-  profileList.forEach(profile => {
+  // The generations are worked out from the parent links, like the
+  // running counts, so that they match the sort order.
+  const memo = new Map();
+  sortedProfileList().forEach(profile => {
     const row = document.createElement('tr');
     const n = document.createElement('td');
     n.append(profileLink(profile));
@@ -289,7 +354,8 @@ function displayProfileList() {
     ancestorCountCells.set(profile, a);
     row.append(a);
     const c = document.createElement('td');
-    c.textContent = formatCompleteness(profile.completenessIndex());
+    c.textContent = formatCompleteness(
+      db.completenessIndex(profile.id(), memo));
     c.title = 'Complete generations: -log2(1 - completeness index)';
     completenessCells.set(profile, c);
     row.append(c);
