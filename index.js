@@ -11,8 +11,7 @@ import { exportToJsonString,
          parseGroupExport,
          mergeGroupImport } from './file_export.js';
 import {
-  CommonAncestorGroup,
-  mergeWithSomeGroup,
+  scoringAlgorithms,
   makeGroupList,
   removeInnerParents
 } from './ancestor_finder.js';
@@ -115,6 +114,7 @@ const stopFetchingButton = document.getElementById('stop-fetching');
 const yearLimitElement = document.getElementById('year-limit');
 const recalculateGroupsButton = document.getElementById('recalculate-groups');
 const groupListElement = document.getElementById('group-list');
+const algorithmSelectElement = document.getElementById('algorithm-select');
 
 // Groups of profiles, saved in the browser's local storage.
 const groupStore = new GroupStore(localStorage);
@@ -533,9 +533,33 @@ async function buildTree(yearLimit) {
   buildAncestorGroups();
 }
 
+// Grouping algorithm menu ==========================================
+
+// Menu text for each of scoringAlgorithms.
+const algorithmLabels = {
+  sharedAncestors: 'Most shared ancestors',
+  kinship: 'Kinship (closer ancestors count more)',
+  closestAncestor: 'Closest common ancestor'
+};
+// The chosen algorithm is remembered in localStorage under this key.
+const algorithmKey = 'groupingAlgorithm';
+
+function displayAlgorithmSelect() {
+  for (const name of Object.keys(scoringAlgorithms)) {
+    const option = document.createElement('option');
+    option.value = name;
+    option.textContent = algorithmLabels[name] ?? name;
+    algorithmSelectElement.append(option);
+  }
+  const stored = localStorage.getItem(algorithmKey);
+  algorithmSelectElement.value =
+    Object.hasOwn(scoringAlgorithms, stored) ? stored : 'sharedAncestors';
+}
+
 function buildAncestorGroups() {
   db.createAncestors();
-  ancestorGroups = makeGroupList(profileList);
+  ancestorGroups = makeGroupList(
+    profileList, scoringAlgorithms[algorithmSelectElement.value]);
   console.log('Ancestor groups are', ancestorGroups);
   displayProfileList();
   displayAncestorGroups();
@@ -740,8 +764,14 @@ recalculateGroupsButton.addEventListener('click', () => {
   buildAncestorGroups();
 });
 
+algorithmSelectElement.addEventListener('change', () => {
+  localStorage.setItem(algorithmKey, algorithmSelectElement.value);
+  buildAncestorGroups();
+});
+
 // ===== Initialize the page from last saved state ====
 await loadDatabase(db);
 console.log('Database size', db.size());
+displayAlgorithmSelect();
 selectGroup(groupStore.currentName());
 buildAncestorGroups();

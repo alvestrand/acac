@@ -93,3 +93,20 @@ test('ancestorIds counts shared ancestors once', () => {
   db.addWithAttributes('c', { name: 'Child', father: 'f', mother: 'm' });
   expect([...db.ancestorIds('c')].sort()).toStrictEqual(['a', 'f', 'm']);
 });
+
+test('ancestorGenerations counts generations by the shortest path', () => {
+  const db = new Database();
+  db.addWithAttributes('a', { name: 'Shared ancestor' });
+  db.addWithAttributes('gf', { name: 'Grandfather', father: 'a' });
+  db.addWithAttributes('f', { name: 'Father', father: 'gf' });
+  db.addWithAttributes('m', { name: 'Mother', father: 'a' });
+  const child = db.addWithAttributes('c', { name: 'Child', father: 'f',
+                                            mother: 'm' });
+  expect(child.ancestorGenerations().size).toBe(0);
+  db.createAncestors();
+  // 'a' is 3 generations back through the father, 2 through the mother.
+  expect(child.ancestorGenerations()).toStrictEqual(
+    new Map([['f', 1], ['gf', 2], ['a', 2], ['m', 1]]));
+  expect(new Set(child.ancestorGenerations().keys()))
+    .toStrictEqual(child.ancestors());
+});
