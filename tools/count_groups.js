@@ -1,10 +1,10 @@
-// Run by hand: reports how many ancestor groups makeGroupList finds
-// for each group in a saved database file, with each scoring algorithm,
+// Run by hand: reports how many ancestor groups are found for each
+// group in a saved database file, with each grouping algorithm,
 // so that the algorithms can be compared.
 //
 // Usage: node tools/count_groups.js [file] [--algorithm=a,b] [--verbose]
 // The file defaults to samples/database.json, and all algorithms in
-// scoringAlgorithms are run unless --algorithm names some of them.
+// groupingAlgorithms are run unless --algorithm names some of them.
 // --verbose keeps the progress logging from ancestor_finder.js and lists
 // each ancestor group with its members and closest common ancestors.
 //
@@ -15,7 +15,7 @@ import { readFileSync } from 'node:fs';
 import { Database } from '../database.js';
 import { parseExport } from '../file_export.js';
 import { profileIds } from '../groups.js';
-import { scoringAlgorithms, makeGroupList, removeInnerParents }
+import { groupingAlgorithms, removeInnerParents }
   from '../ancestor_finder.js';
 
 const args = process.argv.slice(2);
@@ -25,11 +25,11 @@ const fileName = args.find(arg => !arg.startsWith('--'))
 const algorithmArg = args.find(arg => arg.startsWith('--algorithm='));
 const algorithmNames = algorithmArg
   ? algorithmArg.substring('--algorithm='.length).split(',')
-  : Object.keys(scoringAlgorithms);
+  : Object.keys(groupingAlgorithms);
 for (const name of algorithmNames) {
-  if (!(name in scoringAlgorithms)) {
+  if (!(name in groupingAlgorithms)) {
     console.error(`Unknown algorithm '${name}'. Known:`,
-                  Object.keys(scoringAlgorithms).join(', '));
+                  Object.keys(groupingAlgorithms).join(', '));
     process.exit(1);
   }
 }
@@ -73,7 +73,7 @@ for (const [name, entries] of Object.entries(imported.groups)) {
       + (missing ? ` (${missing} not in database)` : ''));
   for (const algorithm of algorithmNames) {
     const groups = quietly(
-      () => makeGroupList(persons, scoringAlgorithms[algorithm]));
+      () => groupingAlgorithms[algorithm](persons, db));
     const shared = groups.filter(group => group.persons.length > 1);
     log(`  ${algorithm.padEnd(width)}  ${groups.length} ancestor groups,`,
         `${shared.length} with more than one member;`,

@@ -11,8 +11,7 @@ import { exportToJsonString,
          parseGroupExport,
          mergeGroupImport } from './file_export.js';
 import {
-  scoringAlgorithms,
-  makeGroupList,
+  groupingAlgorithms,
   removeInnerParents
 } from './ancestor_finder.js';
 
@@ -586,17 +585,18 @@ function ancestorCount(person) {
 
 // Grouping algorithm menu ==========================================
 
-// Menu text for each of scoringAlgorithms.
+// Menu text for each of groupingAlgorithms.
 const algorithmLabels = {
   sharedAncestors: 'Most shared ancestors',
   kinship: 'Kinship (closer ancestors count more)',
-  closestAncestor: 'Closest common ancestor'
+  closestAncestor: 'Closest common ancestor',
+  rootDescendants: 'Root ancestor with most descendants'
 };
 // The chosen algorithm is remembered in localStorage under this key.
 const algorithmKey = 'groupingAlgorithm';
 
 function displayAlgorithmSelect() {
-  for (const name of Object.keys(scoringAlgorithms)) {
+  for (const name of Object.keys(groupingAlgorithms)) {
     const option = document.createElement('option');
     option.value = name;
     option.textContent = algorithmLabels[name] ?? name;
@@ -604,13 +604,13 @@ function displayAlgorithmSelect() {
   }
   const stored = localStorage.getItem(algorithmKey);
   algorithmSelectElement.value =
-    Object.hasOwn(scoringAlgorithms, stored) ? stored : 'sharedAncestors';
+    Object.hasOwn(groupingAlgorithms, stored) ? stored : 'sharedAncestors';
 }
 
 function buildAncestorGroups() {
   db.createAncestors();
-  ancestorGroups = makeGroupList(
-    profileList, scoringAlgorithms[algorithmSelectElement.value]);
+  ancestorGroups = groupingAlgorithms[algorithmSelectElement.value](
+    profileList, db);
   console.log('Ancestor groups are', ancestorGroups);
   displayProfileList();
   displayAncestorGroups();

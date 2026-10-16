@@ -49,9 +49,12 @@ is fetched with the user's Geni login and cached in the browser.
   (`makeGroupList`, `removeInnerParents`). `makeGroupList` takes one of
   `scoringAlgorithms` as its second argument (default `sharedAncestors`);
   the scores use `Person.ancestorGenerations()` (generations back to each
-  ancestor, built by `createAncestors()`).
+  ancestor, built by `createAncestors()`). `groupingAlgorithms` names
+  every way of grouping, `(persons, db) => groups`, for the menu and the
+  tool: one per scoring algorithm, plus `rootDescendants`
+  (`makeRootDescendantGroups`).
 - `tools/count_groups.js`: run by hand (`node tools/count_groups.js
-  [file] [--algorithm=a,b] [--verbose]`) to compare the scoring
+  [file] [--algorithm=a,b] [--verbose]`) to compare the grouping
   algorithms on a saved database, by default `samples/database.json`.
 - `groups.js`: `GroupStore`, groups of member ids in localStorage.
 - `file_export.js`: save/load of the whole database, and of a single
