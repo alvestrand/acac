@@ -10,6 +10,9 @@ class Person {
   // Generations back to each ancestor (1 for parents), by the shortest
   // path. Map of string -> number, with the same keys as #ancestors.
   #ancestorGenerations;
+  // Completeness index: 0.25 for each known parent plus a quarter of
+  // each parent's index. 1 means a complete tree. Built by addAncestors.
+  #completeness;
   // ID of father and mother entry
   #father;
   #mother;
@@ -106,6 +109,12 @@ class Person {
         }
       }
       this.#ancestors = new Set(this.#ancestorGenerations.keys());
+      this.#completeness = 0;
+      for (const parent of [father, mother]) {
+        if (parent) {
+          this.#completeness += 0.25 + 0.25 * parent.#completeness;
+        }
+      }
     }
   }
   // Record an ancestor, keeping the shortest path if it is already known.
@@ -119,6 +128,7 @@ class Person {
   clearAncestors() {
     this.#ancestors = undefined;
     this.#ancestorGenerations = undefined;
+    this.#completeness = undefined;
   }
   ancestors() {
     if (this.#ancestors === undefined) {
@@ -132,6 +142,10 @@ class Person {
       return new Map();
     }
     return this.#ancestorGenerations;
+  }
+  // The completeness index, as built by addAncestors.
+  completenessIndex() {
+    return this.#completeness ?? 0;
   }
 }
 
@@ -222,6 +236,25 @@ class Database {
       }
     }
     return ancestors;
+  }
+  // The completeness index of a person (see Person), worked out from the
+  // parent links. Like ancestorIds, this is always up to date.
+  // memo maps ids already worked out to their index.
+  completenessIndex(id, memo = new Map()) {
+    if (memo.has(id)) {
+      return memo.get(id);
+    }
+    // Guard against loops in the parent links.
+    memo.set(id, 0);
+    const person = this.get(id);
+    let index = 0;
+    for (const parentId of [person?.father(), person?.mother()]) {
+      if (parentId && this.get(parentId)) {
+        index += 0.25 + 0.25 * this.completenessIndex(parentId, memo);
+      }
+    }
+    memo.set(id, index);
+    return index;
   }
   // Build the ancestor sets of all entries from the current parent links.
   // Sets built earlier are rebuilt, since links may have been added since.

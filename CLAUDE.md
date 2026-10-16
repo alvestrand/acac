@@ -42,7 +42,10 @@ is fetched with the user's Geni login and cached in the browser.
   means not fetched yet, `[]` means no known parents.
   `createAncestors()` rebuilds all ancestor sets; `ancestorIds(id)` walks
   the links and is always up to date (used for running counts and group
-  export).
+  export). The completeness index (0.25 per known parent plus a quarter
+  of each parent's index; 1 is a full tree) is built by
+  `createAncestors()` as `Person.completenessIndex()`, and worked out
+  fresh by `Database.completenessIndex(id)` for the running display.
 - `geni_structures.js`: knowledge of Geni's data formats
   (`resolveParents` picks the birth union from a union list).
 - `ancestor_finder.js`: groups profiles by shared ancestors

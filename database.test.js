@@ -110,3 +110,25 @@ test('ancestorGenerations counts generations by the shortest path', () => {
   expect(new Set(child.ancestorGenerations().keys()))
     .toStrictEqual(child.ancestors());
 });
+
+test('Completeness index counts parents and their indexes', () => {
+  const db = new Database();
+  db.addWithAttributes('gf', { name: 'Grandfather' });
+  db.addWithAttributes('f', { name: 'Father', father: 'gf' });
+  db.addWithAttributes('m', { name: 'Mother' });
+  const child = db.addWithAttributes('c', { name: 'Child', father: 'f', mother: 'm' });
+  // Father: 0.25. Child: 0.25 + 0.25 + 0.25 * 0.25.
+  db.createAncestors();
+  expect(db.get('f').completenessIndex()).toBe(0.25);
+  expect(child.completenessIndex()).toBe(0.5625);
+  expect(db.completenessIndex('c')).toBe(0.5625);
+  expect(db.completenessIndex('gf')).toBe(0);
+});
+
+test('Completeness index ignores links to persons not in the database', () => {
+  const db = new Database();
+  const child = db.addWithAttributes('c', { name: 'Child', father: 'missing' });
+  db.createAncestors();
+  expect(child.completenessIndex()).toBe(0);
+  expect(db.completenessIndex('c')).toBe(0);
+});

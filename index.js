@@ -247,20 +247,36 @@ function scheduleRunningCounts() {
 // The cell showing the ancestor count of each profile in the list.
 // Map of Person -> td element.
 let ancestorCountCells = new Map();
+// The cell showing the completeness index of each profile in the list.
+// Map of Person -> td element.
+let completenessCells = new Map();
 
-// Update the ancestor counts in the profile list without redrawing it.
+// The completeness index as shown in the profile list: -log2(1 - index),
+// which is n for a tree complete to n generations back.
+function formatCompleteness(index) {
+  return (-Math.log2(1 - index)).toFixed(1);
+}
+
+// Update the ancestor counts and completeness indexes in the profile
+// list without redrawing it.
 function displayRunningCounts() {
   ancestorCountCells.forEach((cell, profile) => {
     cell.textContent = db.ancestorIds(profile.id()).size;
+  });
+  const memo = new Map();
+  completenessCells.forEach((cell, profile) => {
+    cell.textContent = formatCompleteness(
+      db.completenessIndex(profile.id(), memo));
   });
 }
 
 function displayProfileList() {
   profileListElement.innerHTML = '';
   ancestorCountCells = new Map();
+  completenessCells = new Map();
   const table = document.createElement('table');
   const th = document.createElement('tr');
-  th.innerHTML = '<tr><th>Name<th>Ancestors<th></tr>';
+  th.innerHTML = '<tr><th>Name<th>Ancestors<th>Generations<th></tr>';
   table.append(th);
 
   profileList.forEach(profile => {
@@ -272,6 +288,11 @@ function displayProfileList() {
     a.textContent = profile.ancestors().size;
     ancestorCountCells.set(profile, a);
     row.append(a);
+    const c = document.createElement('td');
+    c.textContent = formatCompleteness(profile.completenessIndex());
+    c.title = 'Complete generations: -log2(1 - completeness index)';
+    completenessCells.set(profile, c);
+    row.append(c);
     const m = document.createElement('td');
     m.append(profileMenu(profile));
     row.append(m);
