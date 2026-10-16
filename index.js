@@ -613,6 +613,20 @@ const algorithmLabels = {
   closestAncestor: 'Closest common ancestor',
   rootDescendants: 'Root ancestor with most descendants'
 };
+// The ones that merge the most complete trees first have the label of
+// the same scoring with this added.
+const completenessSuffix = 'Completeness';
+const completenessLabel = ' + consider completeness';
+
+function algorithmLabel(name) {
+  if (name.endsWith(completenessSuffix)) {
+    const base = name.slice(0, -completenessSuffix.length);
+    if (Object.hasOwn(algorithmLabels, base)) {
+      return algorithmLabels[base] + completenessLabel;
+    }
+  }
+  return algorithmLabels[name] ?? name;
+}
 // The chosen algorithm is remembered in localStorage under this key.
 const algorithmKey = 'groupingAlgorithm';
 
@@ -620,7 +634,7 @@ function displayAlgorithmSelect() {
   for (const name of Object.keys(groupingAlgorithms)) {
     const option = document.createElement('option');
     option.value = name;
-    option.textContent = algorithmLabels[name] ?? name;
+    option.textContent = algorithmLabel(name);
     algorithmSelectElement.append(option);
   }
   const stored = localStorage.getItem(algorithmKey);

@@ -54,7 +54,11 @@ is fetched with the user's Geni login and cached in the browser.
   the scores use `Person.ancestorGenerations()` (generations back to each
   ancestor, built by `createAncestors()`). `groupingAlgorithms` names
   every way of grouping, `(persons, db) => groups`, for the menu and the
-  tool: one per scoring algorithm, plus `rootDescendants`
+  tool: one per scoring algorithm; one more per scoring algorithm named
+  `<scoring>Completeness` (`makeGroupList` with `mergeMostCompleteFirst`
+  as its third argument, merging the profile with the highest
+  completeness index first; the menu labels these as the plain one plus
+  " + consider completeness"); and `rootDescendants`
   (`makeRootDescendantGroups`).
 - `tools/count_groups.js`: run by hand (`node tools/count_groups.js
   [file] [--algorithm=a,b] [--verbose]`) to compare the grouping
