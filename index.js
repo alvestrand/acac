@@ -23,13 +23,26 @@ db.sizeView = number => {
 
 const errorMessageElement = document.getElementById('error-message');
 
-function showErrorMessage(message) {
+// True if the error message shown tells of a lasting state (install
+// error, login status) rather than the outcome of an operation.
+let errorMessageLasting = false;
+
+function showErrorMessage(message, lasting = false) {
   errorMessageElement.innerText = message;
   errorMessageElement.hidden = false;
+  errorMessageLasting = lasting;
 }
 
 function hideErrorMessage() {
   errorMessageElement.hidden = true;
+}
+
+// Called when the user asks for a new operation: the error message
+// from an earlier one no longer applies.
+function startUserOperation() {
+  if (!errorMessageLasting) {
+    hideErrorMessage();
+  }
 }
 
 // Pick up the Geni application id
@@ -42,19 +55,19 @@ try {
     console.log('Geni API is ', geniAppId);
     if (geniAppId.trim() === '') {
       console.log('Geni API key file is empty');
-      showErrorMessage('Install error: Geni API key missing');
+      showErrorMessage('Install error: Geni API key missing', true);
     }
   } else {
     console.log('Fetching Geni API key failed');
-    showErrorMessage('Install error: Geni API key missing');
+    showErrorMessage('Install error: Geni API key missing', true);
   }
 } catch(err) {
   console.log('Fetching Geni API threw, error ', err);
-  showErrorMessage('Install error: Geni API key missing');
+  showErrorMessage('Install error: Geni API key missing', true);
 }
 // Don't hide an install error behind the login status.
 if (errorMessageElement.hidden) {
-  showErrorMessage('Not logged in');
+  showErrorMessage('Not logged in', true);
 }
 
 const client = new GeniClient(geniAppId);
@@ -74,7 +87,7 @@ async function connectToGeni() {
     await client.connect();
     hideErrorMessage();
   } catch (error) {
-    showErrorMessage('Login failed');
+    showErrorMessage('Login failed', true);
     throw error;
   }
 }
@@ -223,6 +236,9 @@ function profileMenu(profile) {
   rebuild.textContent = 'Rebuild tree';
   select.append(title, remove, rebuild);
   select.addEventListener('change', () => {
+    if (select.value !== '') {
+      startUserOperation();
+    }
     if (select.value === 'remove') {
       removeFromProfileList(profile);
     } else if (select.value === 'rebuild') {
@@ -965,6 +981,7 @@ function ancestorCount(person) {
   link.textContent = count;
   link.addEventListener('click', event => {
     event.preventDefault();
+    startUserOperation();
     fetchMoreAncestors(person);
   });
   span.append('[', link, ']');
@@ -1131,16 +1148,19 @@ groupSelectElement.addEventListener('change', async () => {
     newGroupBox.hidden = false;
     newGroupNameElement.focus();
   } else {
+    startUserOperation();
     await switchToGroup(groupSelectElement.value);
   }
 });
 
 newGroupCreateButton.addEventListener('click', () => {
+  startUserOperation();
   createNewGroup();
 });
 
 newGroupNameElement.addEventListener('keydown', event => {
   if (event.key === 'Enter') {
+    startUserOperation();
     createNewGroup();
   } else if (event.key === 'Escape') {
     cancelNewGroup();
@@ -1152,6 +1172,7 @@ newGroupCancelButton.addEventListener('click', () => {
 });
 
 saveGroupButton.addEventListener('click', () => {
+  startUserOperation();
   saveGroupToFile();
 });
 
@@ -1164,25 +1185,30 @@ loadGroupInput.addEventListener('change', async () => {
   // Reset so that choosing the same file again triggers a new change event.
   loadGroupInput.value = '';
   if (file) {
+    startUserOperation();
     await loadGroupFromFile(file);
   }
 });
 
 addProfileElement.addEventListener('change', async () => {
   console.log('Change event detected');
+  startUserOperation();
   addProfile();
 });
 
 addProfileButton.addEventListener('click', async () => {
   console.log('Click detected');
+  startUserOperation();
   addProfile();
 });
 
 saveDatabaseButton.addEventListener('click', async () => {
+  startUserOperation();
   await saveCurrentState();
 });
 
 exportFileButton.addEventListener('click', () => {
+  startUserOperation();
   exportToFile();
 });
 
@@ -1195,11 +1221,13 @@ importFileInput.addEventListener('change', async () => {
   // Reset so that choosing the same file again triggers a new change event.
   importFileInput.value = '';
   if (file) {
+    startUserOperation();
     await importFromFile(file);
   }
 });
 
 buildTreeButton.addEventListener('click', async () => {
+  startUserOperation();
   startTreeBuild();
   try {
     await buildTree(Number(yearLimitElement.value));
@@ -1213,10 +1241,12 @@ stopFetchingButton.addEventListener('click', () => {
 });
 
 recalculateGroupsButton.addEventListener('click', () => {
+  startUserOperation();
   buildAncestorGroups();
 });
 
 algorithmSelectElement.addEventListener('change', () => {
+  startUserOperation();
   localStorage.setItem(algorithmKey, algorithmSelectElement.value);
   buildAncestorGroups();
 });
