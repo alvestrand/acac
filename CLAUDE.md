@@ -27,7 +27,11 @@ is fetched with the user's Geni login and cached in the browser.
 ## Code layout
 
 - `index.js`: page logic. Adding profiles, tree building
-  (`buildTreeForPerson`, recursive, stops at the "back to" year limit),
+  (`buildTreeForPerson`, recursive, stops at the "back to" year limit;
+  `rebuildTree`, from the profile menu, fetches it all again through a
+  refresh pool shared by all running rebuilds, so that shared ancestors
+  are refreshed once; the "already refreshed" set is only emptied when
+  the pool is empty),
   group handling, file save/load, display.
 - `async_geni.js`: `GeniClient`, a queue running one Geni request at a
   time. The next request starts as soon as the previous one is answered;
@@ -40,7 +44,10 @@ is fetched with the user's Geni login and cached in the browser.
   property holds parent profile API URLs
   (`https://www.geni.com/api/profile-<n>`); `parents === undefined`
   means not fetched yet, `[]` means no known parents.
-  `createAncestors()` rebuilds all ancestor sets; `ancestorIds(id)` walks
+  `createAncestors()` rebuilds all ancestor sets; `merge(old, new)`
+  records a Geni merge: links to the old guid are moved to the new one,
+  and the old guid is kept as an alias that `get()` follows (saved with
+  the database); `ancestorIds(id)` walks
   the links and is always up to date (used for running counts and group
   export). The completeness index (0.25 per known parent plus a quarter
   of each parent's index; 1 is a full tree) is built by
@@ -84,6 +91,8 @@ Found by experiment (October 2026); the API docs are thin.
   text. Don't use it for tree building.
 - `fields=` works for choosing profile fields. Edges in graph answers can
   carry `rel_modifier` (e.g. `"foster"`) for non-birth children.
+- Merged profiles are answered with `merged_into` (a profile API URL),
+  as the code assumes; not yet checked with the test page.
 - `profile?ids=a,b,c` fetches several profiles at once, and `/union`
   takes `{ids: [...]}`. Batching per generation is the most promising way
   to cut the number of requests; the maximum ids per request is unknown.

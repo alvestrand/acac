@@ -132,3 +132,79 @@ test('Completeness index ignores links to persons not in the database', () => {
   expect(child.completenessIndex()).toBe(0);
   expect(db.completenessIndex('c')).toBe(0);
 });
+
+test('updateAttributes replaces the record but keeps the object and links', () => {
+  const db = new Database();
+  const person = db.addWithAttributes('g1', {
+    id: 'profile-1', name: 'Old', gender: 'male', father: 'f',
+    birth: {date: {year: 1900}}});
+  db.addWithAttributes('f', { id: 'profile-2' });
+  person.parents = ['url'];
+  const updated = db.updateAttributes('g1', {
+    id: 'profile-1', name: 'New', gender: 'female',
+    birth: {date: {year: 1901}}});
+  expect(updated).toBe(person);
+  expect(db.get('g1')).toBe(person);
+  expect(db.getByIdAttribute('profile-1')).toBe(person);
+  expect(person.name()).toBe('New');
+  expect(person.gender()).toBe('female');
+  expect(person.birth()).toBe(1901);
+  // Parent links are kept until the caller sets new ones, so that the
+  // tree stays whole while a rebuild fetches the parents again.
+  expect(person.father()).toBe('f');
+  expect(person.mother()).toBeUndefined();
+  expect(person.attribute('father')).toBe('f');
+  expect(db.ancestorIds('g1')).toStrictEqual(new Set(['f']));
+  // The public parents property is left to the caller.
+  expect(person.parents).toStrictEqual(['url']);
+});
+
+test('merge moves links to the new person and keeps the old id working', () => {
+  const db = new Database();
+  db.addWithAttributes('old', { id: 'profile-1', name: 'Old' });
+  const current = db.addWithAttributes('new', { id: 'profile-2', name: 'New' });
+  const child1 = db.addWithAttributes('c1', { id: 'profile-3', father: 'old' });
+  child1.parents = ['https://www.geni.com/api/profile-1',
+                    'https://www.geni.com/api/profile-9'];
+  const child2 = db.addWithAttributes('c2', { id: 'profile-4', father: 'new' });
+  expect(db.merge('old', 'new')).toBe(1);
+  expect(child1.father()).toBe('new');
+  expect(child1.parents).toStrictEqual(['https://www.geni.com/api/profile-2',
+                                        'https://www.geni.com/api/profile-9']);
+  expect(db.size()).toBe(3);
+  expect(db.get('old')).toBe(current);
+  expect(db.getByIdAttribute('profile-1')).toBe(current);
+  expect(db.currentId('old')).toBe('new');
+  expect(db.isMerged('old')).toBe(true);
+  // Both children now share the ancestor.
+  db.createAncestors();
+  expect([...child1.ancestors()]).toStrictEqual(['new']);
+  expect([...child2.ancestors()]).toStrictEqual(['new']);
+});
+
+test('merge follows earlier merges into the merged person', () => {
+  const db = new Database();
+  db.addWithAttributes('b', { id: 'profile-2' });
+  db.addWithAttributes('c', { id: 'profile-3' });
+  db.merge('a', 'b');
+  db.merge('b', 'c');
+  expect(db.currentId('a')).toBe('c');
+  expect(db.get('a').id()).toBe('c');
+});
+
+test('merge does nothing without the new person', () => {
+  const db = new Database();
+  const old = db.addWithAttributes('old', { id: 'profile-1' });
+  expect(db.merge('old', 'missing')).toBe(0);
+  expect(db.get('old')).toBe(old);
+  expect(db.isMerged('old')).toBe(false);
+});
+
+test('merges are saved and restored', () => {
+  const db = new Database();
+  db.addWithAttributes('new', { id: 'profile-2' });
+  db.merge('old', 'new');
+  const db2 = new Database();
+  db2.fromJsonString(db.toJsonString());
+  expect(db2.get('old').id()).toBe('new');
+});
