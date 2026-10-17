@@ -133,11 +133,12 @@ test('Completeness index ignores links to persons not in the database', () => {
   expect(db.completenessIndex('c')).toBe(0);
 });
 
-test('updateAttributes replaces the record but keeps the object', () => {
+test('updateAttributes replaces the record but keeps the object and links', () => {
   const db = new Database();
   const person = db.addWithAttributes('g1', {
     id: 'profile-1', name: 'Old', gender: 'male', father: 'f',
     birth: {date: {year: 1900}}});
+  db.addWithAttributes('f', { id: 'profile-2' });
   person.parents = ['url'];
   const updated = db.updateAttributes('g1', {
     id: 'profile-1', name: 'New', gender: 'female',
@@ -148,7 +149,12 @@ test('updateAttributes replaces the record but keeps the object', () => {
   expect(person.name()).toBe('New');
   expect(person.gender()).toBe('female');
   expect(person.birth()).toBe(1901);
-  expect(person.father()).toBeUndefined();
+  // Parent links are kept until the caller sets new ones, so that the
+  // tree stays whole while a rebuild fetches the parents again.
+  expect(person.father()).toBe('f');
+  expect(person.mother()).toBeUndefined();
+  expect(person.attribute('father')).toBe('f');
+  expect(db.ancestorIds('g1')).toStrictEqual(new Set(['f']));
   // The public parents property is left to the caller.
   expect(person.parents).toStrictEqual(['url']);
 });

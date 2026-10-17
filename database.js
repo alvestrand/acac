@@ -55,10 +55,15 @@ class Person {
   }
 
   // Replace the person record with a newly fetched one, keeping the
-  // object, so that lists holding it stay valid. Parent links come from
-  // the new record only; the caller sets them again.
+  // object, so that lists holding it stay valid. Geni's records have no
+  // parent links, so the current ones are kept until the caller sets
+  // new ones; clearing them would cut off the tree in the meantime.
   updateAttributes(attributes) {
+    const father = this.#father;
+    const mother = this.#mother;
     this.#setRecord(attributes);
+    this.setFather(father);
+    this.setMother(mother);
   }
 
   toJSON() {
