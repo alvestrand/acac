@@ -262,11 +262,43 @@ function formatCompleteness(index) {
   return (-Math.log2(1 - index)).toFixed(1);
 }
 
+// The ancestor ids last shown for each profile in the list, by guid.
+// Fetching should only add ancestors, so a shown count going down is
+// reported as a surprise, to find out why it happens. Merges and
+// parents removed on Geni can lower it too, but rarely.
+const shownAncestors = new Map();
+
+// Show the ancestor count of profile in cell. source says which code
+// worked out the ancestors, for the report.
+function showAncestorCount(profile, cell, ancestors, source) {
+  cell.textContent = ancestors.size;
+  const previous = shownAncestors.get(profile.id());
+  shownAncestors.set(profile.id(), ancestors);
+  if (previous === undefined || ancestors.size >= previous.size) {
+    return;
+  }
+  const lost = previous.difference(ancestors);
+  const describe = id => `${db.get(id)?.name()} (${id})`;
+  // Persons still in the tree whose parent links don't match their
+  // parent URLs: where the tree was most likely cut.
+  const suspects = [profile.id(), ...ancestors].map(id => db.get(id))
+    .filter(person => person && (person.parents === undefined
+      || [person.father(), person.mother()].filter(Boolean).length
+         < person.parents.length))
+    .map(person => describe(person.id()));
+  reportSurprise('ancestor count went down',
+                 `${describe(profile.id())}: ${previous.size} to `
+                 + `${ancestors.size}, in ${source}`,
+                 {lost: [...lost].map(describe), suspects,
+                  treeBuildsRunning});
+}
+
 // Update the ancestor counts and completeness indexes in the profile
 // list without redrawing it.
 function displayRunningCounts() {
   ancestorCountCells.forEach((cell, profile) => {
-    cell.textContent = db.ancestorIds(profile.id()).size;
+    showAncestorCount(profile, cell, db.ancestorIds(profile.id()),
+                      'running counts');
   });
   const memo = new Map();
   completenessCells.forEach((cell, profile) => {
@@ -355,7 +387,7 @@ function displayProfileList() {
     n.append(profileLink(profile));
     row.append(n);
     const a = document.createElement('td');
-    a.textContent = profile.ancestors().size;
+    showAncestorCount(profile, a, profile.ancestors(), 'profile list');
     ancestorCountCells.set(profile, a);
     row.append(a);
     const c = document.createElement('td');
