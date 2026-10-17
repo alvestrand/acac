@@ -468,17 +468,13 @@ async function addProfile() {
 }
 
 // Some assumptions about Geni's answers have not been checked yet. If one
-// turns out to be wrong, say so with an alert, once for each kind, so
-// that a test run shows that there is something new to consider.
-const reportedSurprises = new Set();
-
-function reportSurprise(kind, details) {
-  console.log('Unexpected Geni answer:', kind, details);
-  if (!reportedSurprises.has(kind)) {
-    reportedSurprises.add(kind);
-    alert('Unexpected Geni answer: ' + kind + '\n\n' + details
-          + '\n\nSee the console for more.');
-  }
+// turns out to be wrong, show it on the page and stop fetching, so that
+// it can be looked into before more of the database is changed.
+function reportSurprise(kind, details, answer) {
+  console.log('Unexpected Geni answer:', kind, details, answer);
+  showErrorMessage('Unexpected Geni answer: ' + kind + ' (' + details
+                   + '). Fetching stopped; see the console for more.');
+  client.stop();
 }
 
 // Profiles merged on Geni are answered with a merged_into pointer to the
@@ -493,17 +489,17 @@ async function followMerges(profile) {
     if (typeof profile.merged_into !== 'string'
         || !profile.merged_into.startsWith(idToUrl(''))) {
       reportSurprise('merged_into is not a profile API URL',
-                     JSON.stringify(profile));
+                     String(profile.merged_into), profile);
       return profile;
     }
     profile = await client.getPersonByUrl(profile.merged_into);
   }
   if ('merged_into' in profile) {
     reportSurprise(`more than ${maxMergeSteps} merges in a row`,
-                   JSON.stringify(first));
+                   String(first.guid ?? first.id), first);
   } else if (profile !== first && !('guid' in profile)) {
     reportSurprise('the profile merged into has no guid',
-                   JSON.stringify(profile));
+                   String(first.merged_into), profile);
   }
   return profile;
 }
