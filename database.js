@@ -25,7 +25,18 @@ class Person {
 
   constructor(id, attributes) {
     this.#id = id;
+    this.#setRecord(attributes);
+    // For testing: Markers. This is a public attribute.
+    this.markers = new Set();
+  }
+
+  // Take the person's data from a person record.
+  #setRecord(attributes) {
     this.#personRecord = attributes;
+    this.#father = undefined;
+    this.#mother = undefined;
+    this.#birthYear = undefined;
+    this.#gender = undefined;
     if (attributes) {
       if ('father' in attributes) {
         this.#father = attributes.father;
@@ -41,8 +52,13 @@ class Person {
         this.#gender = attributes.gender;
       }
     }
-    // For testing: Markers. This is a public attribute.
-    this.markers = new Set();
+  }
+
+  // Replace the person record with a newly fetched one, keeping the
+  // object, so that lists holding it stay valid. Parent links come from
+  // the new record only; the caller sets them again.
+  updateAttributes(attributes) {
+    this.#setRecord(attributes);
   }
 
   toJSON() {
@@ -184,6 +200,14 @@ class Database {
   addWithAttributes(id, attributes) {
     let newPerson = new Person(id, attributes);
     return this.addPerson(newPerson);
+  }
+  // Replace the record of a person already in the database.
+  updateAttributes(id, attributes) {
+    const person = this.get(id);
+    this.#idAttributeToGuidMap.delete(person.attribute('id'));
+    person.updateAttributes(attributes);
+    this.#idAttributeToGuidMap.set(person.attribute('id'), id);
+    return person;
   }
   // Returns the person with the id, or the one it was merged into.
   get(id) {

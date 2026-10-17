@@ -133,6 +133,26 @@ test('Completeness index ignores links to persons not in the database', () => {
   expect(db.completenessIndex('c')).toBe(0);
 });
 
+test('updateAttributes replaces the record but keeps the object', () => {
+  const db = new Database();
+  const person = db.addWithAttributes('g1', {
+    id: 'profile-1', name: 'Old', gender: 'male', father: 'f',
+    birth: {date: {year: 1900}}});
+  person.parents = ['url'];
+  const updated = db.updateAttributes('g1', {
+    id: 'profile-1', name: 'New', gender: 'female',
+    birth: {date: {year: 1901}}});
+  expect(updated).toBe(person);
+  expect(db.get('g1')).toBe(person);
+  expect(db.getByIdAttribute('profile-1')).toBe(person);
+  expect(person.name()).toBe('New');
+  expect(person.gender()).toBe('female');
+  expect(person.birth()).toBe(1901);
+  expect(person.father()).toBeUndefined();
+  // The public parents property is left to the caller.
+  expect(person.parents).toStrictEqual(['url']);
+});
+
 test('merge moves links to the new person and keeps the old id working', () => {
   const db = new Database();
   db.addWithAttributes('old', { id: 'profile-1', name: 'Old' });

@@ -27,7 +27,8 @@ is fetched with the user's Geni login and cached in the browser.
 ## Code layout
 
 - `index.js`: page logic. Adding profiles, tree building
-  (`buildTreeForPerson`, recursive, stops at the "back to" year limit),
+  (`buildTreeForPerson`, recursive, stops at the "back to" year limit;
+  `rebuildTreeForPerson`, from the profile menu, fetches it all again),
   group handling, file save/load, display.
 - `async_geni.js`: `GeniClient`, a queue running one Geni request at a
   time. The next request starts as soon as the previous one is answered;

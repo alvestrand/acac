@@ -218,10 +218,15 @@ function profileMenu(profile) {
   const remove = document.createElement('option');
   remove.value = 'remove';
   remove.textContent = 'Remove from group';
-  select.append(title, remove);
+  const rebuild = document.createElement('option');
+  rebuild.value = 'rebuild';
+  rebuild.textContent = 'Rebuild tree';
+  select.append(title, remove, rebuild);
   select.addEventListener('change', () => {
     if (select.value === 'remove') {
       removeFromProfileList(profile);
+    } else if (select.value === 'rebuild') {
+      rebuildTree(profile);
     }
     select.value = '';
   });
@@ -731,6 +736,142 @@ async function fetchMoreAncestors(person) {
   } finally {
     finishTreeBuild();
   }
+}
+
+// Fetch person and all ancestors back to the "back to" year limit again,
+// to pick up changes and new parents on Geni, and recalculate the groups.
+async function rebuildTree(person) {
+  startTreeBuild();
+  try {
+    if (!client.connected) {
+      await connectToGeni();
+    }
+    addProfileMessage.innerText = 'Rebuilding tree for ' + person.name();
+    await rebuildTreeForPerson(person, 2025, Number(yearLimitElement.value),
+                               new Set(), new Set());
+    buildAncestorGroups();
+    addProfileMessage.innerText = (client.stopped ? 'Stopped' : 'Finished')
+      + ' rebuilding tree for ' + person.name();
+  } catch (error) {
+    console.log('Rebuilding tree failed, message ', error);
+    addProfileMessage.innerText = 'Rebuilding tree failed, error '
+      + (error?.message ?? JSON.stringify(error));
+  } finally {
+    finishTreeBuild();
+  }
+}
+
+// Like buildTreeForPerson, but fetches every profile and its parents
+// again, even if they are already in the database. visited holds the
+// guids of the persons handled in this rebuild, so that an ancestor
+// reached by several paths is only handled once; fetched those whose
+// profiles were fetched in this rebuild (see refreshPerson).
+async function rebuildTreeForPerson(person, birthYearAssumption, yearLimit,
+                                    visited, fetched) {
+  if (client.stopped || visited.has(person.id())) {
+    return;
+  }
+  visited.add(person.id());
+  const birthYear = person.birth() ?? birthYearAssumption;
+  if (birthYear < yearLimit) {
+    return;
+  }
+  person = await refreshPerson(person, fetched);
+  visited.add(person.id());
+  for (const parentId of [person.father(), person.mother()]) {
+    const parent = parentId && db.get(parentId);
+    if (parent) {
+      await rebuildTreeForPerson(parent, birthYear - 30, yearLimit,
+                                 visited, fetched);
+    }
+  }
+}
+
+// Fetch person's profile and parents from Geni again, and set the parent
+// links from the answer. If a fetch fails, the stored data is kept.
+// If the profile was merged into another, the merge is recorded and the
+// other person is refreshed instead. Returns the person refreshed.
+// fetched holds the guids of profiles already fetched in this rebuild,
+// which are not fetched again; guids fetched here are added to it.
+async function refreshPerson(person, fetched) {
+  if (!fetched.has(person.id())) {
+    let profile;
+    try {
+      profile = await fetchProfile(person.id());
+    } catch (error) {
+      console.log('Refetching', person.name(), 'failed, message', error);
+      return person;
+    }
+    if (!('guid' in profile)) {
+      console.log(person.name(), 'not found, keeping it');
+      return person;
+    }
+    if (profile.guid !== person.id()) {
+      person = storeProfile(profile, person.id());
+      if (fetched.has(person.id())) {
+        // Already refreshed in this rebuild.
+        return person;
+      }
+    }
+    db.updateAttributes(person.id(), profile);
+    fetched.add(person.id());
+  }
+  const oldParents = person.parents;
+  const oldFather = person.father();
+  const oldMother = person.mother();
+  person.parents = undefined;
+  if (person.unions()) {
+    await addParents(person);
+  } else {
+    // Without unions, Geni knows no parents. But every ancestor is in a
+    // union with a partner, so this was not expected in a tree.
+    reportSurprise('a profile in a tree has no unions',
+                   `${person.name()} (${person.id()})`);
+    person.parents = [];
+  }
+  if (person.parents === undefined) {
+    person.parents = oldParents;
+    person.setFather(oldFather);
+    person.setMother(oldMother);
+    return person;
+  }
+  let father;
+  let mother;
+  let failed = false;
+  for (const parentUrl of person.parents) {
+    let parent = db.getByIdAttribute(urlToId(parentUrl));
+    if (!parent) {
+      parent = await addProfileByUrl(parentUrl);
+      if (parent) {
+        fetched.add(parent.id());
+      }
+    }
+    if (!parent) {
+      console.log('Unable to fetch', parentUrl);
+      failed = true;
+    } else if (parent.gender() == 'male') {
+      if (father) {
+        reportSurprise('two fathers', `${person.name()} (${person.id()})`);
+      }
+      father = parent.id();
+    } else {
+      if (mother) {
+        reportSurprise('two mothers, or a parent with unknown gender',
+                       `${person.name()} (${person.id()})`);
+      }
+      mother = parent.id();
+    }
+  }
+  if (!failed && ((oldFather && !father) || (oldMother && !mother))) {
+    // Parents can be removed on Geni, but this may also mean that
+    // resolveParents missed them.
+    reportSurprise('known parents were not found again',
+                   `${person.name()} (${person.id()})`);
+  }
+  // If a parent could not be fetched, keep the old link in its place.
+  person.setFather(father ?? (failed ? oldFather : undefined));
+  person.setMother(mother ?? (failed ? oldMother : undefined));
+  return person;
 }
 
 // The ancestor count of person in [], as a link that fetches more
