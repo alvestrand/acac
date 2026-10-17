@@ -2,9 +2,12 @@
 // Each group is stored under a key of the form 'profileSet-<group name>',
 // holding a JSON array of person ids. Older versions stored whole person
 // records instead of ids; those are still accepted when reading.
+// Members excluded from matching are stored under 'excludedSet-<group
+// name>', as a JSON array of ids; the key is left out when none are.
 // The name of the group last worked on is stored under 'currentSet'.
 
 const profileSetPrefix = 'profileSet-';
+const excludedSetPrefix = 'excludedSet-';
 const currentGroupKey = 'currentSet';
 
 // Convert a group's member list to a list of ids.
@@ -50,6 +53,21 @@ class GroupStore {
 
   remove(name) {
     this.#storage.removeItem(profileSetPrefix + name);
+    this.#storage.removeItem(excludedSetPrefix + name);
+  }
+
+  // The ids of the members of a group excluded from matching.
+  excluded(name) {
+    const stored = this.#storage.getItem(excludedSetPrefix + name);
+    return stored ? JSON.parse(stored) : [];
+  }
+
+  saveExcluded(name, ids) {
+    if (ids.length === 0) {
+      this.#storage.removeItem(excludedSetPrefix + name);
+    } else {
+      this.#storage.setItem(excludedSetPrefix + name, JSON.stringify(ids));
+    }
   }
 
   currentName() {
@@ -81,10 +99,12 @@ class GroupStore {
     return trimmed;
   }
 
-  // Save the members of the group being left, and make another group
-  // the current one. The caller loads the new group's members afterwards.
-  switchTo(fromGroup, fromIds, toGroup) {
+  // Save the members of the group being left, and those of them excluded
+  // from matching, and make another group the current one. The caller
+  // loads the new group's members afterwards.
+  switchTo(fromGroup, fromIds, toGroup, fromExcludedIds = []) {
     this.save(fromGroup, fromIds);
+    this.saveExcluded(fromGroup, fromExcludedIds);
     this.setCurrentName(toGroup);
   }
 }

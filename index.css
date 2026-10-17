@@ -11,6 +11,16 @@ th, td {
   padding: 0.2em;
 }
 
+/* Profiles sharing no ancestors with any other in the group. */
+tr.ungrouped {
+  background: #ffe0b3;
+}
+
+/* Profiles excluded from matching by the user. */
+tr.excluded {
+  background: #fdd;
+}
+
 #layout > tbody > tr > td {
   padding: 0.5em;
 }

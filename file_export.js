@@ -1,17 +1,29 @@
 // Conversion of the database and the groups to and from a single JSON
 // string, used for saving to and loading from a file.
-// In the file, each group is a list of person ids.
+// In the file, each group is a list of person ids. The members of each
+// group excluded from matching are under excluded, as a map of group name
+// -> list of ids; files from older versions have none.
 
 import { profileIds } from './groups.js';
 
 // Represent the database and all groups in the GroupStore as a JSON string.
 // The current group is included even if it has not been saved.
-function exportToJsonString(db, groupStore, currentGroup, currentProfileIds) {
+function exportToJsonString(db, groupStore, currentGroup, currentProfileIds,
+                            currentExcludedIds = []) {
   const groups = groupStore.groups();
   groups[currentGroup] = currentProfileIds;
+  const excluded = {};
+  for (const name of Object.keys(groups)) {
+    const ids = name === currentGroup ? currentExcludedIds
+          : groupStore.excluded(name);
+    if (ids.length > 0) {
+      excluded[name] = ids;
+    }
+  }
   return JSON.stringify({
     ...db.toJsonObject(),
     groups: groups,
+    excluded: excluded,
     currentGroup: currentGroup
   }, null, 2);
 }
@@ -39,6 +51,7 @@ function applyImport(imported, db, groupStore) {
   }
   for (const [name, profiles] of Object.entries(imported.groups)) {
     groupStore.save(name, profileIds(profiles));
+    groupStore.saveExcluded(name, imported.excluded?.[name] ?? []);
   }
   const currentGroup = imported.currentGroup ?? '';
   groupStore.setCurrentName(currentGroup);
@@ -47,8 +60,9 @@ function applyImport(imported, db, groupStore) {
 
 // A single group can also be saved to its own file, so that work on it
 // can be continued elsewhere. The file holds the group name, the member
-// ids in group order, and the person records of the members and all
-// their ancestors found so far.
+// ids in group order, the ids of the members excluded from matching
+// (missing in files from older versions), and the person records of the
+// members and all their ancestors found so far.
 
 // The members and all their known ancestors, as Person objects,
 // each person once. Follows the father and mother links in the database.
@@ -61,10 +75,12 @@ function groupPersons(memberIds, db) {
 }
 
 // Represent a group as a JSON string.
-function exportGroupToJsonString(groupName, memberIds, db) {
+function exportGroupToJsonString(groupName, memberIds, db,
+                                 excludedIds = []) {
   return JSON.stringify({
     groupName: groupName,
     members: memberIds,
+    excluded: excludedIds,
     persons: groupPersons(memberIds, db)
   }, null, 2);
 }
@@ -76,6 +92,9 @@ function parseGroupExport(data) {
   if (!imported || typeof imported.groupName !== 'string'
       || !Array.isArray(imported.members)
       || !imported.members.every(id => typeof id === 'string')
+      || (imported.excluded !== undefined
+          && !(Array.isArray(imported.excluded)
+               && imported.excluded.every(id => typeof id === 'string')))
       || !Array.isArray(imported.persons)
       || !imported.persons.every(person => typeof person?.id === 'string'
                                  && typeof person.attributes === 'object'
@@ -98,11 +117,14 @@ function timestamp(updatedAt) {
 // in only one of the two records are kept either way.
 // Persons known to be merged into others on Geni are left out, and ids
 // in the file are changed to the ids those persons were merged into.
-// Returns the member ids in group order, and how many persons
-// were added, replaced and kept.
+// Returns the member ids in group order, the ids of the members excluded
+// from matching, and how many persons were added, replaced and kept.
 function mergeGroupImport(imported, db) {
   const ids = [...new Set(imported.members.map(id => db.currentId(id)))];
-  const result = { ids: ids, added: 0, replaced: 0, kept: 0 };
+  const excluded = new Set((imported.excluded ?? []).map(
+    id => db.currentId(id)));
+  const result = { ids: ids, excluded: ids.filter(id => excluded.has(id)),
+                   added: 0, replaced: 0, kept: 0 };
   for (const original of imported.persons) {
     if (db.isMerged(original.id)) {
       result.kept++;

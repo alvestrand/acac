@@ -142,8 +142,8 @@ test('Group export and import round trip restores the tree', () => {
   const db = new Database();
   const result = mergeGroupImport(parseGroupExport(exported), db);
 
-  expect(result).toStrictEqual({ ids: ['c', 'cousin'], added: 5,
-                                 replaced: 0, kept: 0 });
+  expect(result).toStrictEqual({ ids: ['c', 'cousin'], excluded: [],
+                                 added: 5, replaced: 0, kept: 0 });
   const child = db.get('c');
   expect(child.father()).toBe('f');
   expect(child.mother()).toBe('m');
@@ -261,8 +261,78 @@ test('Group import leaves out merged persons and follows their merges', () => {
   db.merge('old', 'new');
   const result = mergeGroupImport(parseGroupExport(exported), db);
 
-  expect(result).toStrictEqual({ ids: ['c', 'new'], added: 1,
+  expect(result).toStrictEqual({ ids: ['c', 'new'], excluded: [], added: 1,
                                  replaced: 0, kept: 1 });
   expect(db.get('c').father()).toBe('new');
   expect(db.size()).toBe(2);
+});
+
+test('Export and import round trip keeps the excluded members', () => {
+  const { db, groupStore } = makeSourceState();
+  groupStore.saveExcluded('ids', ['g2']);
+  const exported = exportToJsonString(db, groupStore, 'current',
+                                      ['g1', 'g2'], ['g1']);
+  expect(parseExport(exported).excluded)
+    .toStrictEqual({ ids: ['g2'], current: ['g1'] });
+
+  const storage2 = new FakeStorage();
+  const groupStore2 = new GroupStore(storage2);
+  groupStore2.save('stale', ['x']);
+  groupStore2.saveExcluded('stale', ['x']);
+  applyImport(parseExport(exported), new Database(), groupStore2);
+  expect(groupStore2.excluded('ids')).toStrictEqual(['g2']);
+  expect(groupStore2.excluded('current')).toStrictEqual(['g1']);
+  expect(groupStore2.excluded('saved')).toStrictEqual([]);
+  expect(storage2.getItem('excludedSet-stale')).toBeNull();
+});
+
+test('Import accepts files without excluded members', () => {
+  const { db } = makeSourceState();
+  const oldFormat = JSON.stringify({
+    ...db.toJsonObject(),
+    groups: { old: ['g1'] },
+    currentGroup: 'old'
+  });
+  const groupStore2 = new GroupStore(new FakeStorage());
+  applyImport(parseExport(oldFormat), new Database(), groupStore2);
+  expect(groupStore2.excluded('old')).toStrictEqual([]);
+});
+
+test('Group export and import round trip keeps the excluded members', () => {
+  const exported = exportGroupToJsonString('family', ['c', 'cousin'],
+                                           makeFamily(), ['cousin']);
+  const parsed = parseGroupExport(exported);
+  expect(parsed.excluded).toStrictEqual(['cousin']);
+  const result = mergeGroupImport(parsed, new Database());
+  expect(result.excluded).toStrictEqual(['cousin']);
+});
+
+test('Group import accepts files without excluded members', () => {
+  const exported = JSON.parse(
+    exportGroupToJsonString('family', ['c'], makeFamily()));
+  delete exported.excluded;
+  const parsed = parseGroupExport(JSON.stringify(exported));
+  expect(mergeGroupImport(parsed, new Database()).excluded)
+    .toStrictEqual([]);
+});
+
+test('Group import keeps only excluded ids that are members', () => {
+  const db = new Database();
+  db.addWithAttributes('old', { id: 'profile-1', name: 'Old' });
+  db.addWithAttributes('new', { id: 'profile-2', name: 'New' });
+  db.merge('old', 'new');
+  const result = mergeGroupImport(parseGroupExport(JSON.stringify({
+    groupName: 'group',
+    members: ['old'],
+    excluded: ['old', 'stranger'],
+    persons: []
+  })), db);
+  expect(result.excluded).toStrictEqual(['new']);
+});
+
+test('parseGroupExport rejects a bad excluded list', () => {
+  const file = excluded => JSON.stringify({
+    groupName: 'g', members: [], excluded, persons: [] });
+  expect(() => parseGroupExport(file('a'))).toThrow('Not a saved group');
+  expect(() => parseGroupExport(file([1]))).toThrow('Not a saved group');
 });
