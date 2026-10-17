@@ -428,6 +428,8 @@ async function addProfile() {
           addProfileMessage.innerText = treeBuildingResult(stored);
           return;
         }
+        addProfileMessage.innerText = stored.name() + ' is already in the group';
+        return;
       }
       console.log('Following merged-to pointer', mergedTo);
       fetched = await client.getPersonByUrl(mergedTo);
