@@ -879,36 +879,45 @@ async function rebuildTree(person) {
   }
 }
 
+// Fetch person's profile from Geni again and replace the stored record
+// with it, unless it was fetched already in this round of refreshing.
+// fetched holds the guids of profiles fetched in this round; guids
+// fetched here are added to it. If the profile was merged into another,
+// the merge is recorded and the other person is returned. If the fetch
+// fails, the stored record is kept.
+async function refetchProfile(person, fetched) {
+  if (fetched.has(person.id())) {
+    return person;
+  }
+  let profile;
+  try {
+    profile = await fetchProfile(person.id());
+  } catch (error) {
+    console.log('Refetching', person.name(), 'failed, message', error);
+    return person;
+  }
+  if (!('guid' in profile)) {
+    console.log(person.name(), 'not found, keeping it');
+    return person;
+  }
+  if (profile.guid !== person.id()) {
+    person = storeProfile(profile, person.id());
+    if (fetched.has(person.id())) {
+      return person;
+    }
+  }
+  db.updateAttributes(person.id(), profile);
+  fetched.add(person.id());
+  return person;
+}
+
 // Fetch person's profile and parents from Geni again, and set the parent
 // links from the answer. If a fetch fails, the stored data is kept.
 // If the profile was merged into another, the merge is recorded and the
 // other person is refreshed instead. Returns the person refreshed.
-// fetched holds the guids of profiles already fetched in this round of
-// refreshing, which are not fetched again; guids fetched here are added
-// to it.
+// fetched is as for refetchProfile.
 async function refreshPerson(person, fetched) {
-  if (!fetched.has(person.id())) {
-    let profile;
-    try {
-      profile = await fetchProfile(person.id());
-    } catch (error) {
-      console.log('Refetching', person.name(), 'failed, message', error);
-      return person;
-    }
-    if (!('guid' in profile)) {
-      console.log(person.name(), 'not found, keeping it');
-      return person;
-    }
-    if (profile.guid !== person.id()) {
-      person = storeProfile(profile, person.id());
-      if (fetched.has(person.id())) {
-        // Already refreshed in this rebuild.
-        return person;
-      }
-    }
-    db.updateAttributes(person.id(), profile);
-    fetched.add(person.id());
-  }
+  person = await refetchProfile(person, fetched);
   const oldParents = person.parents;
   const oldFather = person.father();
   const oldMother = person.mother();
@@ -928,33 +937,43 @@ async function refreshPerson(person, fetched) {
     person.setMother(oldMother);
     return person;
   }
-  let father;
-  let mother;
+  const parents = [];
   let failed = false;
   for (const parentUrl of person.parents) {
     let parent = db.getByIdAttribute(urlToId(parentUrl));
-    if (!parent) {
+    if (parent) {
+      // The stored record may be out of date, for instance in gender,
+      // so fetch it again before using it. When the parent's own turn
+      // comes, it is not fetched again.
+      parent = await refetchProfile(parent, fetched);
+    } else {
       parent = await addProfileByUrl(parentUrl);
       if (parent) {
         fetched.add(parent.id());
       }
     }
-    if (!parent) {
+    if (parent) {
+      parents.push(parent);
+    } else {
       console.log('Unable to fetch', parentUrl);
       failed = true;
-    } else if (parent.gender() == 'male') {
-      if (father) {
-        reportSurprise('two fathers', `${person.name()} (${person.id()})`);
-      }
-      father = parent.id();
-    } else {
-      if (mother) {
-        reportSurprise('two mothers, or a parent with unknown gender',
-                       `${person.name()} (${person.id()})`);
-      }
-      mother = parent.id();
     }
   }
+  // The parents are fresh from Geni now, so a mismatch is in Geni's data
+  // or in how the code reads it.
+  const fathers = parents.filter(parent => parent.gender() == 'male');
+  const mothers = parents.filter(parent => parent.gender() != 'male');
+  if (fathers.length > 1 || mothers.length > 1) {
+    reportSurprise(fathers.length > 1 ? 'two fathers'
+                   : 'two mothers, or a parent with unknown gender',
+                   `${person.name()} (${person.id()})`,
+                   parents.map(parent => ({
+                     name: parent.name(), id: parent.id(),
+                     gender: parent.gender(), fetched: fetched.has(parent.id())
+                   })));
+  }
+  const father = fathers.at(-1)?.id();
+  const mother = mothers.at(-1)?.id();
   if (!failed && ((oldFather && !father) || (oldMother && !mother))) {
     // Parents can be removed on Geni, but this may also mean that
     // resolveParents missed them.
