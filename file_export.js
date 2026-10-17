@@ -96,11 +96,24 @@ function timestamp(updatedAt) {
 // in the file has a newer timestamp; otherwise the database record is kept.
 // Parent links are not covered by Geni's timestamp, so links found
 // in only one of the two records are kept either way.
+// Persons known to be merged into others on Geni are left out, and ids
+// in the file are changed to the ids those persons were merged into.
 // Returns the member ids in group order, and how many persons
 // were added, replaced and kept.
 function mergeGroupImport(imported, db) {
-  const result = { ids: imported.members, added: 0, replaced: 0, kept: 0 };
-  for (const record of imported.persons) {
+  const ids = [...new Set(imported.members.map(id => db.currentId(id)))];
+  const result = { ids: ids, added: 0, replaced: 0, kept: 0 };
+  for (const original of imported.persons) {
+    if (db.isMerged(original.id)) {
+      result.kept++;
+      continue;
+    }
+    const record = { ...original, attributes: { ...original.attributes } };
+    for (const link of ['father', 'mother']) {
+      if (record.attributes[link]) {
+        record.attributes[link] = db.currentId(record.attributes[link]);
+      }
+    }
     const existing = db.get(record.id);
     if (!existing) {
       const person = db.addWithAttributes(record.id, record.attributes);

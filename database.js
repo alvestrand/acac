@@ -1,5 +1,7 @@
 // Class declarations for operating a database of person records.
 
+import { urlToId, idToUrl } from './geni_structures.js';
+
 class Person {
   // The identifier used for this person in Geni. String.
   #id;
@@ -153,9 +155,13 @@ class Database {
   // Person records. map of id -> Person.
   #persons;
   #idAttributeToGuidMap;
+  // Profiles merged into others on Geni: map of old id -> current id.
+  // Kept so that ids stored elsewhere (groups, files) still work.
+  #mergedInto;
   constructor() {
     this.#persons = new Map();
     this.#idAttributeToGuidMap = new Map();
+    this.#mergedInto = new Map();
     // Called with the new size whenever the number of entries changes.
     this.sizeView = number => {};
   }
@@ -165,6 +171,7 @@ class Database {
   clear() {
     this.#persons.clear();
     this.#idAttributeToGuidMap.clear();
+    this.#mergedInto.clear();
     this.sizeView(this.#persons.size);
   }
   addPerson(person) {
@@ -178,8 +185,65 @@ class Database {
     let newPerson = new Person(id, attributes);
     return this.addPerson(newPerson);
   }
+  // Returns the person with the id, or the one it was merged into.
   get(id) {
-    return this.#persons.get(id);
+    return this.#persons.get(this.currentId(id));
+  }
+  // The id a person has now, following merges.
+  currentId(id) {
+    return this.#mergedInto.get(id) ?? id;
+  }
+  isMerged(id) {
+    return this.#mergedInto.has(id);
+  }
+  // Record that the profile oldId was merged into newId on Geni, which
+  // must be in the database. The old person is removed, and all links
+  // to it are changed to point to the new one, so that each person has
+  // a single id in the parent links. Returns the number of persons whose
+  // links were changed.
+  merge(oldId, newId) {
+    const newPerson = this.#persons.get(newId);
+    if (oldId === newId || !newPerson) {
+      return 0;
+    }
+    this.#mergedInto.set(oldId, newId);
+    this.#mergedInto.forEach((current, id) => {
+      if (current === oldId) {
+        this.#mergedInto.set(id, newId);
+      }
+    });
+    const oldPerson = this.#persons.get(oldId);
+    if (!oldPerson) {
+      return 0;
+    }
+    this.#persons.delete(oldId);
+    const oldIdAttribute = oldPerson.attribute('id');
+    if (oldIdAttribute !== undefined) {
+      this.#idAttributeToGuidMap.set(oldIdAttribute, newId);
+    }
+    const newUrl = idToUrl(newPerson.attribute('id'));
+    let changed = 0;
+    this.#persons.forEach(person => {
+      let changedThis = false;
+      if (person.father() === oldId) {
+        person.setFather(newId);
+        changedThis = true;
+      }
+      if (person.mother() === oldId) {
+        person.setMother(newId);
+        changedThis = true;
+      }
+      if (person.parents?.some(url => urlToId(url) === oldIdAttribute)) {
+        person.parents = person.parents.map(
+          url => urlToId(url) === oldIdAttribute ? newUrl : url);
+        changedThis = true;
+      }
+      if (changedThis) {
+        changed++;
+      }
+    });
+    this.sizeView(this.#persons.size);
+    return changed;
   }
   getByIdAttribute(idAttribute) {
     const guid = this.#idAttributeToGuidMap.get(idAttribute);
@@ -190,7 +254,8 @@ class Database {
   }
   // Represent the database as an object suitable for JSON.stringify.
   toJsonObject() {
-    return {persons: Object.fromEntries(this.#persons)};
+    return {persons: Object.fromEntries(this.#persons),
+            merged: Object.fromEntries(this.#mergedInto)};
   }
   // Represent the database as a JSON string representation.
   toJsonString() {
@@ -208,6 +273,9 @@ class Database {
       if ('parents' in parsed.persons[key]) {
         entry.parents = parsed.persons[key].parents;
       }
+    }
+    for (const [oldId, newId] of Object.entries(parsed.merged ?? {})) {
+      this.#mergedInto.set(oldId, newId);
     }
   }
   // For debugging: Return all records with a specific birth year

@@ -1,6 +1,6 @@
 import { Person, Database } from './database.js';
 import { GeniClient } from './async_geni.js';
-import { urlToId, resolveParents } from './geni_structures.js';
+import { urlToId, idToUrl, resolveParents } from './geni_structures.js';
 import { loadDatabase,
          saveDatabase } from './opfsdb.js';
 import { GroupStore } from './groups.js';
@@ -435,19 +435,15 @@ async function addProfile() {
       fetched = await client.getPersonByUrl(mergedTo);
     } else {
       console.log('Adding profile ', guid);
-      fetched = await client.getPerson(guid);
+      fetched = await fetchProfile(guid);
     }
-    if ('merged_into' in fetched) {
-      // We assume that this goes only one level deep.
-      console.log('Follwing merged-to pointer from newly fetched');
-      fetched = await client.getPersonByUrl(fetched.merged_into);
-    }
+    fetched = await followMerges(fetched);
     if (!('guid' in fetched)) {
       console.log('No guid, no profile?');
       addProfileMessage.innerText = 'Add did not find a profile';
       return;
     }
-    const person = db.addWithAttributes(fetched.guid, fetched);
+    const person = storeProfile(fetched, stored?.id());
     addNameToProfileList(person);
     addProfileElement.value = '';
     console.log('Building tree for added person', person.name());
@@ -466,15 +462,102 @@ async function addProfile() {
   }
 }
 
+// Some assumptions about Geni's answers have not been checked yet. If one
+// turns out to be wrong, say so with an alert, once for each kind, so
+// that a test run shows that there is something new to consider.
+const reportedSurprises = new Set();
+
+function reportSurprise(kind, details) {
+  console.log('Unexpected Geni answer:', kind, details);
+  if (!reportedSurprises.has(kind)) {
+    reportedSurprises.add(kind);
+    alert('Unexpected Geni answer: ' + kind + '\n\n' + details
+          + '\n\nSee the console for more.');
+  }
+}
+
+// Profiles merged on Geni are answered with a merged_into pointer to the
+// profile they were merged into, which may itself have been merged.
+const maxMergeSteps = 5;
+
+// Follow merged_into pointers from a fetched profile to the current one.
+async function followMerges(profile) {
+  const first = profile;
+  for (let i = 0; i < maxMergeSteps && 'merged_into' in profile; i++) {
+    console.log('Following merged-to pointer', profile.merged_into);
+    if (typeof profile.merged_into !== 'string'
+        || !profile.merged_into.startsWith(idToUrl(''))) {
+      reportSurprise('merged_into is not a profile API URL',
+                     JSON.stringify(profile));
+      return profile;
+    }
+    profile = await client.getPersonByUrl(profile.merged_into);
+  }
+  if ('merged_into' in profile) {
+    reportSurprise(`more than ${maxMergeSteps} merges in a row`,
+                   JSON.stringify(first));
+  } else if (profile !== first && !('guid' in profile)) {
+    reportSurprise('the profile merged into has no guid',
+                   JSON.stringify(profile));
+  }
+  return profile;
+}
+
+// Fetch a profile by guid, following merges.
+async function fetchProfile(guid) {
+  const profile = await client.getPerson(guid);
+  if ('guid' in profile && profile.guid !== guid
+      && !('merged_into' in profile)) {
+    // Treated as a merge, but Geni was expected to say merged_into.
+    reportSurprise('asked for one guid, got another without merged_into',
+                   `Asked for ${guid}, got ${profile.guid}`);
+  }
+  return followMerges(profile);
+}
+
+// Add a fetched profile to the database, unless it is there already.
+// If it was fetched for the person oldId and has another guid, oldId was
+// merged into it: record the merge, which moves the links to it.
+// Returns the person.
+function storeProfile(profile, oldId) {
+  const person = db.get(profile.guid)
+        ?? db.addWithAttributes(profile.guid, profile);
+  if (oldId !== undefined && oldId !== profile.guid) {
+    const changed = db.merge(oldId, profile.guid);
+    console.log(oldId, 'was merged into', person.name(), '- changed links of',
+                changed, 'persons');
+    followMergesInProfileList();
+  }
+  return person;
+}
+
+// Replace persons in the profile list that have been merged into others.
+function followMergesInProfileList() {
+  const seen = new Set();
+  profileList = profileList.map(entry => db.get(entry.id()) ?? entry)
+    .filter(entry => !seen.has(entry) && seen.add(entry));
+}
+
+// Fetch a profile by guid, following merges. Returns the person,
+// or undefined if no profile was found.
+async function fetchPersonByGuid(guid) {
+  const profile = await fetchProfile(guid);
+  if (!('guid' in profile)) {
+    console.log('No profile found for', guid);
+    return undefined;
+  }
+  return storeProfile(profile, guid);
+}
+
 async function addProfileByUrl(url) {
   try {
     console.log('Adding profile ', url);
-    const fetched = await client.getPersonByUrl(url);
+    const fetched = await followMerges(await client.getPersonByUrl(url));
     if (!('guid' in fetched)) {
       console.log('No guid, no profile?');
       return;
     }
-    const person = db.addWithAttributes(fetched.guid, fetched);
+    const person = storeProfile(fetched);
     console.log('Added', person.name());
     return person;
   } catch (error) {
@@ -594,8 +677,7 @@ async function buildTreeForPerson(person, birthYearAssumption, yearLimit,
     let dbFather = db.get(person.father());
     if (!dbFather) {
       // somehow ref to father got stored, but not father
-      const fetched = await client.getPerson(person.father());
-      dbFather = db.addWithAttributes(fetched.guid, fetched);
+      dbFather = await fetchPersonByGuid(person.father());
     }
     await buildTreeForPerson(dbFather, birthYear - 30, yearLimit,
                              generations - 1);
@@ -604,8 +686,7 @@ async function buildTreeForPerson(person, birthYearAssumption, yearLimit,
     let dbMother = db.get(person.mother());
     if (!dbMother) {
       // somehow ref to mother got stored, but not mother
-      const fetched = await client.getPerson(person.mother());
-      dbMother = db.addWithAttributes(fetched.guid, fetched);
+      dbMother = await fetchPersonByGuid(person.mother());
     }
     await buildTreeForPerson(dbMother, birthYear - 30, yearLimit,
                              generations - 1);
