@@ -766,8 +766,81 @@ async function fetchMoreAncestors(person) {
   }
 }
 
+// Rebuilding fetches profiles and their parents again, even if they are
+// already in the database, to pick up changes on Geni. All rebuilds share
+// one pool of profiles waiting to be refreshed, worked through by a single
+// runRefreshPool, so that an ancestor shared by several profiles being
+// rebuilt at the same time is only refreshed once.
+
+// Profiles waiting to be refreshed: map of guid -> {birthYearAssumption,
+// yearLimit}. Refreshed in the order added, one generation after another.
+const refreshPool = new Map();
+// Guids refreshed since the pool was last empty. They are not refreshed
+// again until the pool has been completely emptied.
+const refreshedGuids = new Set();
+// Guids whose profiles were fetched since the pool was last empty
+// (see refreshPerson). Emptied together with refreshedGuids.
+const fetchedGuids = new Set();
+// The running runRefreshPool, or undefined.
+let refreshRun;
+
+// Add person to the refresh pool, unless already refreshed. If it is
+// waiting already, keep the most generous limits of the two requests.
+function requestRefresh(person, birthYearAssumption, yearLimit) {
+  const id = person.id();
+  if (refreshedGuids.has(id)) {
+    return;
+  }
+  const waiting = refreshPool.get(id);
+  if (waiting) {
+    birthYearAssumption = Math.max(birthYearAssumption,
+                                   waiting.birthYearAssumption);
+    yearLimit = Math.min(yearLimit, waiting.yearLimit);
+  }
+  refreshPool.set(id, {birthYearAssumption, yearLimit});
+}
+
+// Refresh the profiles in the pool until it is empty, adding the parents
+// of each one refreshed, back to the "back to" year limit. Profiles
+// beyond the limit are left out without being marked as refreshed, so
+// that a request with a lower limit can still refresh them.
+async function runRefreshPool() {
+  try {
+    while (refreshPool.size > 0 && !client.stopped) {
+      const [id, {birthYearAssumption, yearLimit}] =
+            refreshPool.entries().next().value;
+      refreshPool.delete(id);
+      // The profile may have been merged into another since it was added.
+      let person = db.get(id);
+      if (!person || refreshedGuids.has(person.id())) {
+        continue;
+      }
+      const birthYear = person.birth() ?? birthYearAssumption;
+      if (birthYear < yearLimit) {
+        continue;
+      }
+      refreshedGuids.add(person.id());
+      person = await refreshPerson(person, fetchedGuids);
+      refreshedGuids.add(person.id());
+      for (const parentId of [person.father(), person.mother()]) {
+        const parent = parentId && db.get(parentId);
+        if (parent) {
+          requestRefresh(parent, birthYear - 30, yearLimit);
+        }
+      }
+    }
+  } finally {
+    // Stopped, failed or done: start afresh next time.
+    refreshPool.clear();
+    refreshedGuids.clear();
+    fetchedGuids.clear();
+    refreshRun = undefined;
+  }
+}
+
 // Fetch person and all ancestors back to the "back to" year limit again,
 // to pick up changes and new parents on Geni, and recalculate the groups.
+// If other rebuilds are running, this waits until they are all done.
 async function rebuildTree(person) {
   startTreeBuild();
   try {
@@ -775,8 +848,9 @@ async function rebuildTree(person) {
       await connectToGeni();
     }
     addProfileMessage.innerText = 'Rebuilding tree for ' + person.name();
-    await rebuildTreeForPerson(person, 2025, Number(yearLimitElement.value),
-                               new Set(), new Set());
+    requestRefresh(person, 2025, Number(yearLimitElement.value));
+    refreshRun ??= runRefreshPool();
+    await refreshRun;
     buildAncestorGroups();
     addProfileMessage.innerText = (client.stopped ? 'Stopped' : 'Finished')
       + ' rebuilding tree for ' + person.name();
@@ -789,38 +863,13 @@ async function rebuildTree(person) {
   }
 }
 
-// Like buildTreeForPerson, but fetches every profile and its parents
-// again, even if they are already in the database. visited holds the
-// guids of the persons handled in this rebuild, so that an ancestor
-// reached by several paths is only handled once; fetched those whose
-// profiles were fetched in this rebuild (see refreshPerson).
-async function rebuildTreeForPerson(person, birthYearAssumption, yearLimit,
-                                    visited, fetched) {
-  if (client.stopped || visited.has(person.id())) {
-    return;
-  }
-  visited.add(person.id());
-  const birthYear = person.birth() ?? birthYearAssumption;
-  if (birthYear < yearLimit) {
-    return;
-  }
-  person = await refreshPerson(person, fetched);
-  visited.add(person.id());
-  for (const parentId of [person.father(), person.mother()]) {
-    const parent = parentId && db.get(parentId);
-    if (parent) {
-      await rebuildTreeForPerson(parent, birthYear - 30, yearLimit,
-                                 visited, fetched);
-    }
-  }
-}
-
 // Fetch person's profile and parents from Geni again, and set the parent
 // links from the answer. If a fetch fails, the stored data is kept.
 // If the profile was merged into another, the merge is recorded and the
 // other person is refreshed instead. Returns the person refreshed.
-// fetched holds the guids of profiles already fetched in this rebuild,
-// which are not fetched again; guids fetched here are added to it.
+// fetched holds the guids of profiles already fetched in this round of
+// refreshing, which are not fetched again; guids fetched here are added
+// to it.
 async function refreshPerson(person, fetched) {
   if (!fetched.has(person.id())) {
     let profile;
