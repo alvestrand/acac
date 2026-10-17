@@ -48,8 +48,8 @@ is fetched with the user's Geni login and cached in the browser.
   records a Geni merge: links to the old guid are moved to the new one,
   and the old guid is kept as an alias that `get()` follows (saved with
   the database); `ancestorIds(id)` walks
-  the links and is always up to date (used for running counts and group
-  export). The completeness index (0.25 per known parent plus a quarter
+  the links and is always up to date (used for the counts in the profile
+  list and group export). The completeness index (0.25 per known parent plus a quarter
   of each parent's index; 1 is a full tree) is built by
   `createAncestors()` as `Person.completenessIndex()`, and worked out
   fresh by `Database.completenessIndex(id)` for the running display.

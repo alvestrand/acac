@@ -295,12 +295,14 @@ function showAncestorCount(profile, cell, ancestors, source) {
   }
   const lost = previous.difference(ancestors);
   const describe = id => `${db.get(id)?.name()} (${id})`;
-  // Persons still in the tree whose parent links don't match their
-  // parent URLs: where the tree was most likely cut.
+  // Persons still in the tree with fewer parent links than parent URLs:
+  // where the tree was most likely cut. Persons whose parents have not
+  // been fetched (parents undefined) are left out, since that is normal
+  // at the "back to" year limit.
   const suspects = [profile.id(), ...ancestors].map(id => db.get(id))
-    .filter(person => person && (person.parents === undefined
-      || [person.father(), person.mother()].filter(Boolean).length
-         < person.parents.length))
+    .filter(person => person?.parents !== undefined
+      && [person.father(), person.mother()].filter(Boolean).length
+         < person.parents.length)
     .map(person => describe(person.id()));
   reportSurprise('ancestor count went down',
                  `${describe(profile.id())}: ${previous.size} to `
@@ -403,7 +405,11 @@ function displayProfileList() {
     n.append(profileLink(profile));
     row.append(n);
     const a = document.createElement('td');
-    showAncestorCount(profile, a, profile.ancestors(), 'profile list');
+    // From the parent links, like the running counts: the ancestor sets
+    // are only built when fetching is finished, so during a fetch they
+    // would show older, lower counts.
+    showAncestorCount(profile, a, db.ancestorIds(profile.id()),
+                      'profile list');
     ancestorCountCells.set(profile, a);
     row.append(a);
     const c = document.createElement('td');
