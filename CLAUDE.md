@@ -42,7 +42,10 @@ is fetched with the user's Geni login and cached in the browser.
   means not fetched yet, `[]` means no known parents.
   `createAncestors()` rebuilds all ancestor sets; `ancestorIds(id)` walks
   the links and is always up to date (used for running counts and group
-  export).
+  export). The completeness index (0.25 per known parent plus a quarter
+  of each parent's index; 1 is a full tree) is built by
+  `createAncestors()` as `Person.completenessIndex()`, and worked out
+  fresh by `Database.completenessIndex(id)` for the running display.
 - `geni_structures.js`: knowledge of Geni's data formats
   (`resolveParents` picks the birth union from a union list).
 - `ancestor_finder.js`: groups profiles by shared ancestors
@@ -51,7 +54,11 @@ is fetched with the user's Geni login and cached in the browser.
   the scores use `Person.ancestorGenerations()` (generations back to each
   ancestor, built by `createAncestors()`). `groupingAlgorithms` names
   every way of grouping, `(persons, db) => groups`, for the menu and the
-  tool: one per scoring algorithm, plus `rootDescendants`
+  tool: one per scoring algorithm; one more per scoring algorithm named
+  `<scoring>Completeness` (`makeGroupList` with `mergeMostCompleteFirst`
+  as its third argument, merging the profile with the highest
+  completeness index first; the menu labels these as the plain one plus
+  " + consider completeness"); and `rootDescendants`
   (`makeRootDescendantGroups`).
 - `tools/count_groups.js`: run by hand (`node tools/count_groups.js
   [file] [--algorithm=a,b] [--verbose]`) to compare the grouping

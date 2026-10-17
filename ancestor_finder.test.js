@@ -111,3 +111,45 @@ test('groupingAlgorithms has one entry per scoring algorithm', () => {
       .toStrictEqual(memberIds(makeGroupList(persons, score)));
   }
 });
+
+test('sharedAncestorsCompleteness merges the most complete profile first', () => {
+  const db = new Database();
+  const add = (id, father, mother) => db.addWithAttributes(
+    id, { name: id, father: father, mother: mother });
+  for (const id of ['s', 't', 'v', 'w', 'x', 'y']) {
+    add(id);
+  }
+  // P has the most complete tree, and shares s with R. Q shares v and w
+  // with R, so the highest scoring pair is Q and R.
+  add('p1', 's', 't');
+  add('p2', 'x', 'y');
+  add('P', 'p1', 'p2');
+  add('r1', 's');
+  add('u1', 'v', 'w');
+  add('R', 'r1', 'u1');
+  add('q1', 'v', 'w');
+  add('Q', 'q1');
+  db.createAncestors();
+  expect(db.get('P').completenessIndex()).toBe(0.75);
+  expect(db.get('R').completenessIndex()).toBe(0.6875);
+  expect(db.get('Q').completenessIndex()).toBe(0.375);
+  const persons = ['P', 'Q', 'R'].map(id => db.get(id));
+  expect(memberIds(groupingAlgorithms.sharedAncestors(persons, db)))
+    .toStrictEqual([['P'], ['Q', 'R']]);
+  const groups = groupingAlgorithms.sharedAncestorsCompleteness(persons, db);
+  expect(memberIds(groups)).toStrictEqual([['P', 'R'], ['Q']]);
+  expect(groups[0].ancestors).toStrictEqual(new Set(['s']));
+});
+
+test('groupingAlgorithms has a completeness variant per scoring algorithm', () => {
+  const db = cousinsAndDistantRelative();
+  const persons = ['X', 'Y', 'Z', 'N'].map(id => db.get(id));
+  for (const name of Object.keys(scoringAlgorithms)) {
+    expect(groupingAlgorithms).toHaveProperty(name + 'Completeness');
+  }
+  // Y is the most complete, and the scores pick its partner.
+  expect(memberIds(groupingAlgorithms.sharedAncestorsCompleteness(persons, db)))
+    .toStrictEqual([['X'], ['Y', 'Z'], ['N']]);
+  expect(memberIds(groupingAlgorithms.kinshipCompleteness(persons, db)))
+    .toStrictEqual([['Y', 'X'], ['Z'], ['N']]);
+});

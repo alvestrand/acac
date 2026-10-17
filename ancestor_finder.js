@@ -85,16 +85,48 @@ function mergeOverlappingGroups(groupList, score) {
   return newGroupList;
 }
 
-// Start with one group per person, and merge the highest scoring pair
-// of groups until no two groups share any ancestor. The score is one of
-// scoringAlgorithms, so that they can be compared on the same data.
+// Another way of choosing which groups to merge: take the group whose
+// first member has the highest completeness index, and merge it with the
+// highest scoring group. If no group scores above zero, go on to the
+// next most complete. The idea is that the best known trees give the
+// most reliable common ancestors. Ties go to the more complete partner.
+function mergeMostCompleteFirst(groupList, score) {
+  const byCompleteness = groupList.toSorted(
+    (a, b) => b.persons[0].completenessIndex()
+            - a.persons[0].completenessIndex());
+  for (const group of byCompleteness) {
+    let partner;
+    let maxScore = 0;
+    for (const other of byCompleteness) {
+      if (other != group) {
+        const pairScore = score(group, other);
+        if (pairScore > maxScore) {
+          partner = other;
+          maxScore = pairScore;
+        }
+      }
+    }
+    if (partner) {
+      console.log('Merging', group.persons[0].name(), 'with', partner.persons[0].name());
+      group.mergeGroup(partner);
+      return groupList.filter(entry => entry != partner);
+    }
+  }
+  return groupList;  // No change
+}
+
+// Start with one group per person, and merge pairs of groups until no
+// two groups share any ancestor. The score is one of scoringAlgorithms,
+// so that they can be compared on the same data. merge picks the pair:
+// by default the highest scoring one.
 function makeGroupList(personList,
-                       score = scoringAlgorithms.sharedAncestors) {
+                       score = scoringAlgorithms.sharedAncestors,
+                       merge = mergeOverlappingGroups) {
   let groupList = personList.map(person => new CommonAncestorGroup(person));
   let currentSize = groupList.length;
   while (true) {
     console.log('Group list length is ', currentSize);
-    groupList = mergeOverlappingGroups(groupList, score);
+    groupList = merge(groupList, score);
     if (currentSize == groupList.length) {
       return groupList;
     }
@@ -151,6 +183,15 @@ const groupingAlgorithms = {
   kinship: persons => makeGroupList(persons, scoringAlgorithms.kinship),
   closestAncestor: persons =>
     makeGroupList(persons, scoringAlgorithms.closestAncestor),
+  sharedAncestorsCompleteness: persons =>
+    makeGroupList(persons, scoringAlgorithms.sharedAncestors,
+                  mergeMostCompleteFirst),
+  kinshipCompleteness: persons =>
+    makeGroupList(persons, scoringAlgorithms.kinship,
+                  mergeMostCompleteFirst),
+  closestAncestorCompleteness: persons =>
+    makeGroupList(persons, scoringAlgorithms.closestAncestor,
+                  mergeMostCompleteFirst),
   rootDescendants: makeRootDescendantGroups
 };
 
