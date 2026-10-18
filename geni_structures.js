@@ -1,7 +1,7 @@
 // This file contains functions that require understanding of the way
 // Geni structures data, but do not
 
-export { urlToId, idToUrl, resolveParents }
+export { urlToId, idToUrl, isolateId, resolveParents }
 
 function urlToId(url) {
   return url.replace('https://www.geni.com/api/', '');
@@ -9,6 +9,14 @@ function urlToId(url) {
 
 function idToUrl(id) {
   return 'https://www.geni.com/api/' + id;
+}
+
+// The last part of a profile URL or path, without any query: the guid
+// or profile id typed or pasted into the "Add profile" field.
+function isolateId(url) {
+  const basepart = url.split('?')[0];
+  const parts = basepart.split('/');
+  return parts[parts.length-1];
 }
 
 function resolveParents(profile, unionList) {

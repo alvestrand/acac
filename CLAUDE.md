@@ -15,7 +15,8 @@ is fetched with the user's Geni login and cached in the browser.
   requests and pushes to main (free, since the repo is public).
 - The app is plain ES modules served as static files; open `index.html`.
   It reads the Geni app id from `.geni_app_id` (gitignored) next to it.
-- Tests cover the non-UI modules. `index.js` (page code) has no tests;
+- Tests cover the non-UI modules, including `display_functions.js`.
+  `index.js` (page code) has no tests;
   page changes must be tried in a browser, which Claude can't do, so say
   so when reporting.
 - `testpage.html` runs a single Geni API call (path + JSON parameters)
@@ -53,8 +54,15 @@ is fetched with the user's Geni login and cached in the browser.
   of each parent's index; 1 is a full tree) is built by
   `createAncestors()` as `Person.completenessIndex()`, and worked out
   fresh by `Database.completenessIndex(id)` for the running display.
+- `display_functions.js`: what the page shows, without touching the
+  document: names and initials, sorting of the profile list, row
+  classes, the group list contents, the falling-count analysis, menu
+  labels, messages and file names. The page's state is passed in as
+  arguments. Put new display logic here, with tests, and keep only the
+  element building in `index.js`.
 - `geni_structures.js`: knowledge of Geni's data formats
-  (`resolveParents` picks the birth union from a union list).
+  (`resolveParents` picks the birth union from a union list;
+  `isolateId` takes the guid or id from a typed profile URL).
 - `ancestor_finder.js`: groups profiles by shared ancestors
   (`makeGroupList`, `removeInnerParents`). `makeGroupList` takes one of
   `scoringAlgorithms` as its second argument (default `sharedAncestors`);

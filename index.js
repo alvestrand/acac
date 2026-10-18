@@ -1,6 +1,7 @@
 import { Person, Database } from './database.js';
 import { GeniClient } from './async_geni.js';
-import { urlToId, idToUrl, resolveParents } from './geni_structures.js';
+import { urlToId, idToUrl, isolateId,
+         resolveParents } from './geni_structures.js';
 import { loadDatabase,
          saveDatabase } from './opfsdb.js';
 import { GroupStore } from './groups.js';
@@ -10,10 +11,8 @@ import { exportToJsonString,
          exportGroupToJsonString,
          parseGroupExport,
          mergeGroupImport } from './file_export.js';
-import {
-  groupingAlgorithms,
-  removeInnerParents
-} from './ancestor_finder.js';
+import { groupingAlgorithms } from './ancestor_finder.js';
+import * as display from './display_functions.js';
 
 let db = new Database;
 const cacheSizeElement = document.getElementById('cache-size');
@@ -102,13 +101,6 @@ let excludedProfileIds = new Set();
 // added since then are not, as they have not been grouped yet.
 let ungroupedProfileIds = new Set();
 
-// Utility functions
-function isolateId(url) {
-  const basepart = url.split('?')[0];
-  const parts = basepart.split('/');
-  return parts[parts.length-1];
-}
-
 // Get UI elements from HTML file.
 const groupSelectElement = document.getElementById('group-select');
 const newGroupBox = document.getElementById('new-group-box');
@@ -134,6 +126,7 @@ const yearLimitElement = document.getElementById('year-limit');
 const recalculateGroupsButton = document.getElementById('recalculate-groups');
 const groupListElement = document.getElementById('group-list');
 const algorithmSelectElement = document.getElementById('algorithm-select');
+const initialsOnlyElement = document.getElementById('initials-only');
 
 // Groups of profiles, saved in the browser's local storage.
 const groupStore = new GroupStore(localStorage);
@@ -227,6 +220,16 @@ function loadProfileList() {
   displayProfileList();
 }
 
+// The "Show initials only" setting is remembered in localStorage under
+// this key.
+const initialsOnlyKey = 'initialsOnly';
+
+// The name of person as shown on the page (see display.displayName).
+function displayName(person) {
+  return display.displayName(person, initialsOnlyElement.checked,
+                             new Set(currentProfileIds()));
+}
+
 // Returns a link that opens the person's Geni profile in a new tab.
 function profileLink(person) {
   const link = document.createElement('a');
@@ -234,7 +237,7 @@ function profileLink(person) {
     'https://www.geni.com/people/profile/' + person.guid();
   link.target = '_blank';
   link.rel = 'noopener';
-  link.textContent = person.name();
+  link.textContent = displayName(person);
   return link;
 }
 
@@ -294,12 +297,6 @@ let ancestorCountCells = new Map();
 // Map of Person -> td element.
 let completenessCells = new Map();
 
-// The completeness index as shown in the profile list: -log2(1 - index),
-// which is n for a tree complete to n generations back.
-function formatCompleteness(index) {
-  return (-Math.log2(1 - index)).toFixed(1);
-}
-
 // The ancestor ids last shown for each profile in the list, by guid.
 // Fetching should only add ancestors, so a shown count going down is
 // reported as a surprise, to find out why it happens. Merges and
@@ -312,24 +309,18 @@ function showAncestorCount(profile, cell, ancestors, source) {
   cell.textContent = ancestors.size;
   const previous = shownAncestors.get(profile.id());
   shownAncestors.set(profile.id(), ancestors);
-  if (previous === undefined || ancestors.size >= previous.size) {
+  const drop = display.ancestorCountDrop(previous, ancestors, profile.id(),
+                                         db);
+  if (!drop) {
     return;
   }
-  const lost = previous.difference(ancestors);
   const describe = id => `${db.get(id)?.name()} (${id})`;
-  // Persons still in the tree with fewer parent links than parent URLs:
-  // where the tree was most likely cut. Persons whose parents have not
-  // been fetched (parents undefined) are left out, since that is normal
-  // at the "back to" year limit.
-  const suspects = [profile.id(), ...ancestors].map(id => db.get(id))
-    .filter(person => person?.parents !== undefined
-      && [person.father(), person.mother()].filter(Boolean).length
-         < person.parents.length)
-    .map(person => describe(person.id()));
   reportSurprise('ancestor count went down',
-                 `${describe(profile.id())}: ${previous.size} to `
+                 `${displayName(profile)} (${profile.id()}): `
+                 + `${previous.size} to `
                  + `${ancestors.size}, in ${source}`,
-                 {lost: [...lost].map(describe), suspects,
+                 {lost: drop.lost.map(describe),
+                  suspects: drop.suspects.map(describe),
                   treeBuildsRunning});
 }
 
@@ -342,49 +333,21 @@ function displayRunningCounts() {
   });
   const memo = new Map();
   completenessCells.forEach((cell, profile) => {
-    cell.textContent = formatCompleteness(
+    cell.textContent = display.formatCompleteness(
       db.completenessIndex(profile.id(), memo));
   });
 }
 
-// Ways of sorting the profile list, chosen by clicking a column heading.
-// Each gives a sort key: names A to Z, most complete generations first.
-// Only the display is sorted; profileList keeps its order.
-const profileSortKeys = {
-  name: profile => profile.name() ?? '',
-  generations: (profile, memo) => -db.completenessIndex(profile.id(), memo)
-};
-// The column the list is sorted on, or undefined for the order added.
-// Clicking the same heading again reverses the order.
+// The column the profile list is sorted on (see display.sortProfiles),
+// or undefined for the order added. Only the display is sorted;
+// profileList keeps its order.
 let profileSortColumn;
 let profileSortReversed = false;
 
 function sortProfileList(column) {
-  if (profileSortColumn === column) {
-    profileSortReversed = !profileSortReversed;
-  } else {
-    profileSortColumn = column;
-    profileSortReversed = false;
-  }
+  ({ column: profileSortColumn, reversed: profileSortReversed } =
+   display.nextSortState(column, profileSortColumn, profileSortReversed));
   displayProfileList();
-}
-
-function sortedProfileList() {
-  if (profileSortColumn === undefined) {
-    return profileList;
-  }
-  const memo = new Map();
-  const key = profileSortKeys[profileSortColumn];
-  const keys = new Map(profileList.map(
-    profile => [profile, key(profile, memo)]));
-  const direction = profileSortReversed ? -1 : 1;
-  return profileList.toSorted((a, b) => {
-    const keyA = keys.get(a);
-    const keyB = keys.get(b);
-    const order = typeof keyA === 'string'
-      ? keyA.localeCompare(keyB) : keyA - keyB;
-    return direction * order;
-  });
 }
 
 // A column heading that sorts the list on column when clicked.
@@ -392,10 +355,8 @@ function sortHeading(text, column) {
   const th = document.createElement('th');
   const link = document.createElement('a');
   link.href = '#';
-  link.textContent = text;
-  if (profileSortColumn === column) {
-    link.textContent += profileSortReversed ? ' \u25b2' : ' \u25bc';
-  }
+  link.textContent = text + display.sortIndicator(
+    column, profileSortColumn, profileSortReversed);
   link.title = 'Sort on this column; click again to reverse';
   link.addEventListener('click', event => {
     event.preventDefault();
@@ -421,12 +382,13 @@ function displayProfileList() {
   // The generations are worked out from the parent links, like the
   // running counts, so that they match the sort order.
   const memo = new Map();
-  sortedProfileList().forEach(profile => {
+  display.sortProfiles(profileList, profileSortColumn, profileSortReversed,
+                       db).forEach(profile => {
     const row = document.createElement('tr');
-    if (excludedProfileIds.has(profile.id())) {
-      row.classList.add('excluded');
-    } else if (ungroupedProfileIds.has(profile.id())) {
-      row.classList.add('ungrouped');
+    const rowClass = display.profileRowClass(
+      profile.id(), excludedProfileIds, ungroupedProfileIds);
+    if (rowClass) {
+      row.classList.add(rowClass);
     }
     const n = document.createElement('td');
     n.append(profileLink(profile));
@@ -440,7 +402,7 @@ function displayProfileList() {
     ancestorCountCells.set(profile, a);
     row.append(a);
     const c = document.createElement('td');
-    c.textContent = formatCompleteness(
+    c.textContent = display.formatCompleteness(
       db.completenessIndex(profile.id(), memo));
     c.title = 'Complete generations: -log2(1 - completeness index)';
     completenessCells.set(profile, c);
@@ -486,8 +448,7 @@ function removeFromProfileList(profile) {
 let profileBeingFetched;
 
 function treeBuildingResult(person) {
-  return (client.stopped ? 'Stopped' : 'Finished') + ' tree building for '
-    + person.name();
+  return display.treeBuildingResult(displayName(person), client.stopped);
 }
 
 async function addProfile() {
@@ -515,17 +476,19 @@ async function addProfile() {
       const mergedTo = stored.attribute('merged_into');
       if (mergedTo === undefined) {
         // Profile is OK
-        addProfileMessage.innerText = stored.name() + ' already in DB';
+        addProfileMessage.innerText = displayName(stored) + ' already in DB';
         if (addNameToProfileList(stored)) {
           addProfileElement.value = '';
           console.log('Building tree for added person', stored.name());
-          addProfileMessage.innerText = 'Building tree for ' + stored.name();
+          addProfileMessage.innerText = 'Building tree for '
+            + displayName(stored);
           await buildTreeForPerson(stored, 2025, Number(yearLimitElement.value));
           buildAncestorGroups();
           addProfileMessage.innerText = treeBuildingResult(stored);
           return;
         }
-        addProfileMessage.innerText = stored.name() + ' is already in the group';
+        addProfileMessage.innerText = displayName(stored)
+          + ' is already in the group';
         return;
       }
       console.log('Following merged-to pointer', mergedTo);
@@ -544,7 +507,7 @@ async function addProfile() {
     addNameToProfileList(person);
     addProfileElement.value = '';
     console.log('Building tree for added person', person.name());
-    addProfileMessage.innerText = 'Building tree for ' + person.name();
+    addProfileMessage.innerText = 'Building tree for ' + displayName(person);
     await buildTreeForPerson(person, 2025, Number(yearLimitElement.value));
     buildAncestorGroups();
     addProfileMessage.innerText = treeBuildingResult(person);
@@ -815,7 +778,8 @@ async function fetchMoreAncestors(person) {
     if (!client.connected) {
       await connectToGeni();
     }
-    addProfileMessage.innerText = 'Fetching ancestors of ' + person.name();
+    addProfileMessage.innerText = 'Fetching ancestors of '
+      + displayName(person);
     await buildTreeForPerson(person, 2025, -Infinity, extraGenerations);
     buildAncestorGroups();
     addProfileMessage.innerText = treeBuildingResult(person);
@@ -909,13 +873,13 @@ async function rebuildTree(person) {
     if (!client.connected) {
       await connectToGeni();
     }
-    addProfileMessage.innerText = 'Rebuilding tree for ' + person.name();
+    addProfileMessage.innerText = 'Rebuilding tree for ' + displayName(person);
     requestRefresh(person, 2025, Number(yearLimitElement.value));
     refreshRun ??= runRefreshPool();
     await refreshRun;
     buildAncestorGroups();
     addProfileMessage.innerText = (client.stopped ? 'Stopped' : 'Finished')
-      + ' rebuilding tree for ' + person.name();
+      + ' rebuilding tree for ' + displayName(person);
   } catch (error) {
     console.log('Rebuilding tree failed, message ', error);
     addProfileMessage.innerText = 'Rebuilding tree failed, error '
@@ -974,7 +938,7 @@ async function refreshPerson(person, fetched) {
     // Without unions, Geni knows no parents. But every ancestor is in a
     // union with a partner, so this was not expected in a tree.
     reportSurprise('a profile in a tree has no unions',
-                   `${person.name()} (${person.id()})`);
+                   `${displayName(person)} (${person.id()})`);
     person.parents = [];
   }
   if (person.parents === undefined) {
@@ -1012,7 +976,7 @@ async function refreshPerson(person, fetched) {
   if (fathers.length > 1 || mothers.length > 1) {
     reportSurprise(fathers.length > 1 ? 'two fathers'
                    : 'two mothers, or a parent with unknown gender',
-                   `${person.name()} (${person.id()})`,
+                   `${displayName(person)} (${person.id()})`,
                    parents.map(parent => ({
                      name: parent.name(), id: parent.id(),
                      gender: parent.gender(), fetched: fetched.has(parent.id())
@@ -1024,7 +988,7 @@ async function refreshPerson(person, fetched) {
     // Parents can be removed on Geni, but this may also mean that
     // resolveParents missed them.
     reportSurprise('known parents were not found again',
-                   `${person.name()} (${person.id()})`);
+                   `${displayName(person)} (${person.id()})`);
   }
   // If a parent could not be fetched, keep the old link in its place.
   person.setFather(father ?? (failed ? oldFather : undefined));
@@ -1055,27 +1019,6 @@ function ancestorCount(person) {
 
 // Grouping algorithm menu ==========================================
 
-// Menu text for each of groupingAlgorithms.
-const algorithmLabels = {
-  sharedAncestors: 'Most shared ancestors',
-  kinship: 'Kinship (closer ancestors count more)',
-  closestAncestor: 'Closest common ancestor',
-  rootDescendants: 'Root ancestor with most descendants'
-};
-// The ones that merge the most complete trees first have the label of
-// the same scoring with this added.
-const completenessSuffix = 'Completeness';
-const completenessLabel = ' + consider completeness';
-
-function algorithmLabel(name) {
-  if (name.endsWith(completenessSuffix)) {
-    const base = name.slice(0, -completenessSuffix.length);
-    if (Object.hasOwn(algorithmLabels, base)) {
-      return algorithmLabels[base] + completenessLabel;
-    }
-  }
-  return algorithmLabels[name] ?? name;
-}
 // The chosen algorithm is remembered in localStorage under this key.
 const algorithmKey = 'groupingAlgorithm';
 
@@ -1083,7 +1026,7 @@ function displayAlgorithmSelect() {
   for (const name of Object.keys(groupingAlgorithms)) {
     const option = document.createElement('option');
     option.value = name;
-    option.textContent = algorithmLabel(name);
+    option.textContent = display.algorithmLabel(name);
     algorithmSelectElement.append(option);
   }
   const stored = localStorage.getItem(algorithmKey);
@@ -1097,9 +1040,7 @@ function buildAncestorGroups() {
     profileList.filter(profile => !excludedProfileIds.has(profile.id())),
     db);
   console.log('Ancestor groups are', ancestorGroups);
-  ungroupedProfileIds = new Set(ancestorGroups
-    .filter(item => item.persons.length === 1)
-    .map(item => item.persons[0].id()));
+  ungroupedProfileIds = display.ungroupedIds(ancestorGroups);
   displayProfileList();
   displayAncestorGroups();
 }
@@ -1107,17 +1048,14 @@ function buildAncestorGroups() {
 function displayAncestorGroups() {
   const dl = document.createElement('dl');
 
-  // People who share no ancestors with anyone are left out.
-  ancestorGroups.filter(item => item.persons.length > 1).forEach(item => {
+  display.groupListEntries(ancestorGroups, db).forEach(entry => {
     const dt = document.createElement('dt');
-    const personArray = item.persons.map(person => person.name());
-    personArray.forEach(personName => {
-      dt.appendChild(document.createTextNode(personName));
+    entry.members.forEach(member => {
+      dt.appendChild(document.createTextNode(displayName(member)));
       dt.appendChild(document.createElement('br'));
     });
     const dd = document.createElement('dd');
-    const significantAncestors = removeInnerParents(db, item.ancestors);
-    significantAncestors.forEach(ancestor => {
+    entry.ancestors.forEach(ancestor => {
       dd.appendChild(profileLink(ancestor));
       dd.appendChild(document.createTextNode(
         ' (' + ancestor.birth() + ') '));
@@ -1146,22 +1084,17 @@ function downloadJson(json, fileName) {
   URL.revokeObjectURL(url);
 }
 
-function today() {
-  return new Date().toISOString().slice(0, 10);
-}
-
 function exportToFile() {
   const exported = exportToJsonString(db, groupStore, currentGroup,
                                       currentProfileIds(),
                                       currentExcludedIds());
-  downloadJson(exported, 'acac-' + today() + '.json');
+  downloadJson(exported, display.databaseFileName(new Date()));
 }
 
 function saveGroupToFile() {
   const exported = exportGroupToJsonString(currentGroup, currentProfileIds(),
                                            db, currentExcludedIds());
-  const groupName = currentGroup === '' ? 'unnamed' : currentGroup;
-  downloadJson(exported, 'acac-group-' + groupName + '-' + today() + '.json');
+  downloadJson(exported, display.groupFileName(currentGroup, new Date()));
 }
 
 // Merge the persons in a group file into the database, and make the
@@ -1317,6 +1250,12 @@ recalculateGroupsButton.addEventListener('click', () => {
   buildAncestorGroups();
 });
 
+initialsOnlyElement.addEventListener('change', () => {
+  localStorage.setItem(initialsOnlyKey, initialsOnlyElement.checked);
+  displayProfileList();
+  displayAncestorGroups();
+});
+
 algorithmSelectElement.addEventListener('change', () => {
   startUserOperation();
   localStorage.setItem(algorithmKey, algorithmSelectElement.value);
@@ -1327,5 +1266,6 @@ algorithmSelectElement.addEventListener('change', () => {
 await loadDatabase(db);
 console.log('Database size', db.size());
 displayAlgorithmSelect();
+initialsOnlyElement.checked = localStorage.getItem(initialsOnlyKey) === 'true';
 selectGroup(groupStore.currentName());
 buildAncestorGroups();
