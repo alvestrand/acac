@@ -248,3 +248,21 @@ test('parseGroupExport rejects JSON that is not a group file', () => {
   expect(() => parseGroupExport('{"persons": {}, "groups": {}}'))
     .toThrow('Not a saved group');
 });
+
+test('Group import leaves out merged persons and follows their merges', () => {
+  const source = new Database();
+  source.addWithAttributes('old', { id: 'profile-old', name: 'Old' });
+  source.addWithAttributes('c', { id: 'profile-c', name: 'Child',
+                                  father: 'old' });
+  const exported = exportGroupToJsonString('g', ['c', 'old'], source);
+
+  const db = new Database();
+  db.addWithAttributes('new', { id: 'profile-new', name: 'New' });
+  db.merge('old', 'new');
+  const result = mergeGroupImport(parseGroupExport(exported), db);
+
+  expect(result).toStrictEqual({ ids: ['c', 'new'], added: 1,
+                                 replaced: 0, kept: 1 });
+  expect(db.get('c').father()).toBe('new');
+  expect(db.size()).toBe(2);
+});

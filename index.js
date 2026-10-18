@@ -1,6 +1,6 @@
 import { Person, Database } from './database.js';
 import { GeniClient } from './async_geni.js';
-import { urlToId, resolveParents } from './geni_structures.js';
+import { urlToId, idToUrl, resolveParents } from './geni_structures.js';
 import { loadDatabase,
          saveDatabase } from './opfsdb.js';
 import { GroupStore } from './groups.js';
@@ -23,13 +23,26 @@ db.sizeView = number => {
 
 const errorMessageElement = document.getElementById('error-message');
 
-function showErrorMessage(message) {
+// True if the error message shown tells of a lasting state (install
+// error, login status) rather than the outcome of an operation.
+let errorMessageLasting = false;
+
+function showErrorMessage(message, lasting = false) {
   errorMessageElement.innerText = message;
   errorMessageElement.hidden = false;
+  errorMessageLasting = lasting;
 }
 
 function hideErrorMessage() {
   errorMessageElement.hidden = true;
+}
+
+// Called when the user asks for a new operation: the error message
+// from an earlier one no longer applies.
+function startUserOperation() {
+  if (!errorMessageLasting) {
+    hideErrorMessage();
+  }
 }
 
 // Pick up the Geni application id
@@ -42,19 +55,19 @@ try {
     console.log('Geni API is ', geniAppId);
     if (geniAppId.trim() === '') {
       console.log('Geni API key file is empty');
-      showErrorMessage('Install error: Geni API key missing');
+      showErrorMessage('Install error: Geni API key missing', true);
     }
   } else {
     console.log('Fetching Geni API key failed');
-    showErrorMessage('Install error: Geni API key missing');
+    showErrorMessage('Install error: Geni API key missing', true);
   }
 } catch(err) {
   console.log('Fetching Geni API threw, error ', err);
-  showErrorMessage('Install error: Geni API key missing');
+  showErrorMessage('Install error: Geni API key missing', true);
 }
 // Don't hide an install error behind the login status.
 if (errorMessageElement.hidden) {
-  showErrorMessage('Not logged in');
+  showErrorMessage('Not logged in', true);
 }
 
 const client = new GeniClient(geniAppId);
@@ -74,7 +87,7 @@ async function connectToGeni() {
     await client.connect();
     hideErrorMessage();
   } catch (error) {
-    showErrorMessage('Login failed');
+    showErrorMessage('Login failed', true);
     throw error;
   }
 }
@@ -218,10 +231,18 @@ function profileMenu(profile) {
   const remove = document.createElement('option');
   remove.value = 'remove';
   remove.textContent = 'Remove from group';
-  select.append(title, remove);
+  const rebuild = document.createElement('option');
+  rebuild.value = 'rebuild';
+  rebuild.textContent = 'Rebuild tree';
+  select.append(title, remove, rebuild);
   select.addEventListener('change', () => {
+    if (select.value !== '') {
+      startUserOperation();
+    }
     if (select.value === 'remove') {
       removeFromProfileList(profile);
+    } else if (select.value === 'rebuild') {
+      rebuildTree(profile);
     }
     select.value = '';
   });
@@ -257,11 +278,45 @@ function formatCompleteness(index) {
   return (-Math.log2(1 - index)).toFixed(1);
 }
 
+// The ancestor ids last shown for each profile in the list, by guid.
+// Fetching should only add ancestors, so a shown count going down is
+// reported as a surprise, to find out why it happens. Merges and
+// parents removed on Geni can lower it too, but rarely.
+const shownAncestors = new Map();
+
+// Show the ancestor count of profile in cell. source says which code
+// worked out the ancestors, for the report.
+function showAncestorCount(profile, cell, ancestors, source) {
+  cell.textContent = ancestors.size;
+  const previous = shownAncestors.get(profile.id());
+  shownAncestors.set(profile.id(), ancestors);
+  if (previous === undefined || ancestors.size >= previous.size) {
+    return;
+  }
+  const lost = previous.difference(ancestors);
+  const describe = id => `${db.get(id)?.name()} (${id})`;
+  // Persons still in the tree with fewer parent links than parent URLs:
+  // where the tree was most likely cut. Persons whose parents have not
+  // been fetched (parents undefined) are left out, since that is normal
+  // at the "back to" year limit.
+  const suspects = [profile.id(), ...ancestors].map(id => db.get(id))
+    .filter(person => person?.parents !== undefined
+      && [person.father(), person.mother()].filter(Boolean).length
+         < person.parents.length)
+    .map(person => describe(person.id()));
+  reportSurprise('ancestor count went down',
+                 `${describe(profile.id())}: ${previous.size} to `
+                 + `${ancestors.size}, in ${source}`,
+                 {lost: [...lost].map(describe), suspects,
+                  treeBuildsRunning});
+}
+
 // Update the ancestor counts and completeness indexes in the profile
 // list without redrawing it.
 function displayRunningCounts() {
   ancestorCountCells.forEach((cell, profile) => {
-    cell.textContent = db.ancestorIds(profile.id()).size;
+    showAncestorCount(profile, cell, db.ancestorIds(profile.id()),
+                      'running counts');
   });
   const memo = new Map();
   completenessCells.forEach((cell, profile) => {
@@ -350,7 +405,11 @@ function displayProfileList() {
     n.append(profileLink(profile));
     row.append(n);
     const a = document.createElement('td');
-    a.textContent = profile.ancestors().size;
+    // From the parent links, like the running counts: the ancestor sets
+    // are only built when fetching is finished, so during a fetch they
+    // would show older, lower counts.
+    showAncestorCount(profile, a, db.ancestorIds(profile.id()),
+                      'profile list');
     ancestorCountCells.set(profile, a);
     row.append(a);
     const c = document.createElement('td');
@@ -428,24 +487,22 @@ async function addProfile() {
           addProfileMessage.innerText = treeBuildingResult(stored);
           return;
         }
+        addProfileMessage.innerText = stored.name() + ' is already in the group';
+        return;
       }
       console.log('Following merged-to pointer', mergedTo);
       fetched = await client.getPersonByUrl(mergedTo);
     } else {
       console.log('Adding profile ', guid);
-      fetched = await client.getPerson(guid);
+      fetched = await fetchProfile(guid);
     }
-    if ('merged_into' in fetched) {
-      // We assume that this goes only one level deep.
-      console.log('Follwing merged-to pointer from newly fetched');
-      fetched = await client.getPersonByUrl(fetched.merged_into);
-    }
+    fetched = await followMerges(fetched);
     if (!('guid' in fetched)) {
       console.log('No guid, no profile?');
       addProfileMessage.innerText = 'Add did not find a profile';
       return;
     }
-    const person = db.addWithAttributes(fetched.guid, fetched);
+    const person = storeProfile(fetched, stored?.id());
     addNameToProfileList(person);
     addProfileElement.value = '';
     console.log('Building tree for added person', person.name());
@@ -464,15 +521,98 @@ async function addProfile() {
   }
 }
 
+// Some assumptions about Geni's answers have not been checked yet. If one
+// turns out to be wrong, show it on the page and stop fetching, so that
+// it can be looked into before more of the database is changed.
+function reportSurprise(kind, details, answer) {
+  console.log('Unexpected Geni answer:', kind, details, answer);
+  showErrorMessage('Unexpected Geni answer: ' + kind + ' (' + details
+                   + '). Fetching stopped; see the console for more.');
+  client.stop();
+}
+
+// Profiles merged on Geni are answered with a merged_into pointer to the
+// profile they were merged into, which may itself have been merged.
+const maxMergeSteps = 5;
+
+// Follow merged_into pointers from a fetched profile to the current one.
+async function followMerges(profile) {
+  const first = profile;
+  for (let i = 0; i < maxMergeSteps && 'merged_into' in profile; i++) {
+    console.log('Following merged-to pointer', profile.merged_into);
+    if (typeof profile.merged_into !== 'string'
+        || !profile.merged_into.startsWith(idToUrl(''))) {
+      reportSurprise('merged_into is not a profile API URL',
+                     String(profile.merged_into), profile);
+      return profile;
+    }
+    profile = await client.getPersonByUrl(profile.merged_into);
+  }
+  if ('merged_into' in profile) {
+    reportSurprise(`more than ${maxMergeSteps} merges in a row`,
+                   String(first.guid ?? first.id), first);
+  } else if (profile !== first && !('guid' in profile)) {
+    reportSurprise('the profile merged into has no guid',
+                   String(first.merged_into), profile);
+  }
+  return profile;
+}
+
+// Fetch a profile by guid, following merges.
+async function fetchProfile(guid) {
+  const profile = await client.getPerson(guid);
+  if ('guid' in profile && profile.guid !== guid
+      && !('merged_into' in profile)) {
+    // Treated as a merge, but Geni was expected to say merged_into.
+    reportSurprise('asked for one guid, got another without merged_into',
+                   `Asked for ${guid}, got ${profile.guid}`);
+  }
+  return followMerges(profile);
+}
+
+// Add a fetched profile to the database, unless it is there already.
+// If it was fetched for the person oldId and has another guid, oldId was
+// merged into it: record the merge, which moves the links to it.
+// Returns the person.
+function storeProfile(profile, oldId) {
+  const person = db.get(profile.guid)
+        ?? db.addWithAttributes(profile.guid, profile);
+  if (oldId !== undefined && oldId !== profile.guid) {
+    const changed = db.merge(oldId, profile.guid);
+    console.log(oldId, 'was merged into', person.name(), '- changed links of',
+                changed, 'persons');
+    followMergesInProfileList();
+  }
+  return person;
+}
+
+// Replace persons in the profile list that have been merged into others.
+function followMergesInProfileList() {
+  const seen = new Set();
+  profileList = profileList.map(entry => db.get(entry.id()) ?? entry)
+    .filter(entry => !seen.has(entry) && seen.add(entry));
+}
+
+// Fetch a profile by guid, following merges. Returns the person,
+// or undefined if no profile was found.
+async function fetchPersonByGuid(guid) {
+  const profile = await fetchProfile(guid);
+  if (!('guid' in profile)) {
+    console.log('No profile found for', guid);
+    return undefined;
+  }
+  return storeProfile(profile, guid);
+}
+
 async function addProfileByUrl(url) {
   try {
     console.log('Adding profile ', url);
-    const fetched = await client.getPersonByUrl(url);
+    const fetched = await followMerges(await client.getPersonByUrl(url));
     if (!('guid' in fetched)) {
       console.log('No guid, no profile?');
       return;
     }
-    const person = db.addWithAttributes(fetched.guid, fetched);
+    const person = storeProfile(fetched);
     console.log('Added', person.name());
     return person;
   } catch (error) {
@@ -592,8 +732,7 @@ async function buildTreeForPerson(person, birthYearAssumption, yearLimit,
     let dbFather = db.get(person.father());
     if (!dbFather) {
       // somehow ref to father got stored, but not father
-      const fetched = await client.getPerson(person.father());
-      dbFather = db.addWithAttributes(fetched.guid, fetched);
+      dbFather = await fetchPersonByGuid(person.father());
     }
     await buildTreeForPerson(dbFather, birthYear - 30, yearLimit,
                              generations - 1);
@@ -602,8 +741,7 @@ async function buildTreeForPerson(person, birthYearAssumption, yearLimit,
     let dbMother = db.get(person.mother());
     if (!dbMother) {
       // somehow ref to mother got stored, but not mother
-      const fetched = await client.getPerson(person.mother());
-      dbMother = db.addWithAttributes(fetched.guid, fetched);
+      dbMother = await fetchPersonByGuid(person.mother());
     }
     await buildTreeForPerson(dbMother, birthYear - 30, yearLimit,
                              generations - 1);
@@ -650,6 +788,210 @@ async function fetchMoreAncestors(person) {
   }
 }
 
+// Rebuilding fetches profiles and their parents again, even if they are
+// already in the database, to pick up changes on Geni. All rebuilds share
+// one pool of profiles waiting to be refreshed, worked through by a single
+// runRefreshPool, so that an ancestor shared by several profiles being
+// rebuilt at the same time is only refreshed once.
+
+// Profiles waiting to be refreshed: map of guid -> {birthYearAssumption,
+// yearLimit}. Refreshed in the order added, one generation after another.
+const refreshPool = new Map();
+// Guids refreshed since the pool was last empty. They are not refreshed
+// again until the pool has been completely emptied.
+const refreshedGuids = new Set();
+// Guids whose profiles were fetched since the pool was last empty
+// (see refreshPerson). Emptied together with refreshedGuids.
+const fetchedGuids = new Set();
+// The running runRefreshPool, or undefined.
+let refreshRun;
+
+// Add person to the refresh pool, unless already refreshed. If it is
+// waiting already, keep the most generous limits of the two requests.
+function requestRefresh(person, birthYearAssumption, yearLimit) {
+  const id = person.id();
+  if (refreshedGuids.has(id)) {
+    return;
+  }
+  const waiting = refreshPool.get(id);
+  if (waiting) {
+    birthYearAssumption = Math.max(birthYearAssumption,
+                                   waiting.birthYearAssumption);
+    yearLimit = Math.min(yearLimit, waiting.yearLimit);
+  }
+  refreshPool.set(id, {birthYearAssumption, yearLimit});
+}
+
+// Refresh the profiles in the pool until it is empty, adding the parents
+// of each one refreshed, back to the "back to" year limit. Profiles
+// beyond the limit are left out without being marked as refreshed, so
+// that a request with a lower limit can still refresh them.
+async function runRefreshPool() {
+  try {
+    while (refreshPool.size > 0 && !client.stopped) {
+      const [id, {birthYearAssumption, yearLimit}] =
+            refreshPool.entries().next().value;
+      refreshPool.delete(id);
+      // The profile may have been merged into another since it was added.
+      let person = db.get(id);
+      if (!person || refreshedGuids.has(person.id())) {
+        continue;
+      }
+      const birthYear = person.birth() ?? birthYearAssumption;
+      if (birthYear < yearLimit) {
+        continue;
+      }
+      refreshedGuids.add(person.id());
+      person = await refreshPerson(person, fetchedGuids);
+      refreshedGuids.add(person.id());
+      for (const parentId of [person.father(), person.mother()]) {
+        const parent = parentId && db.get(parentId);
+        if (parent) {
+          requestRefresh(parent, birthYear - 30, yearLimit);
+        }
+      }
+    }
+  } finally {
+    // Stopped, failed or done: start afresh next time.
+    refreshPool.clear();
+    refreshedGuids.clear();
+    fetchedGuids.clear();
+    refreshRun = undefined;
+  }
+}
+
+// Fetch person and all ancestors back to the "back to" year limit again,
+// to pick up changes and new parents on Geni, and recalculate the groups.
+// If other rebuilds are running, this waits until they are all done.
+async function rebuildTree(person) {
+  startTreeBuild();
+  try {
+    if (!client.connected) {
+      await connectToGeni();
+    }
+    addProfileMessage.innerText = 'Rebuilding tree for ' + person.name();
+    requestRefresh(person, 2025, Number(yearLimitElement.value));
+    refreshRun ??= runRefreshPool();
+    await refreshRun;
+    buildAncestorGroups();
+    addProfileMessage.innerText = (client.stopped ? 'Stopped' : 'Finished')
+      + ' rebuilding tree for ' + person.name();
+  } catch (error) {
+    console.log('Rebuilding tree failed, message ', error);
+    addProfileMessage.innerText = 'Rebuilding tree failed, error '
+      + (error?.message ?? JSON.stringify(error));
+  } finally {
+    finishTreeBuild();
+  }
+}
+
+// Fetch person's profile from Geni again and replace the stored record
+// with it, unless it was fetched already in this round of refreshing.
+// fetched holds the guids of profiles fetched in this round; guids
+// fetched here are added to it. If the profile was merged into another,
+// the merge is recorded and the other person is returned. If the fetch
+// fails, the stored record is kept.
+async function refetchProfile(person, fetched) {
+  if (fetched.has(person.id())) {
+    return person;
+  }
+  let profile;
+  try {
+    profile = await fetchProfile(person.id());
+  } catch (error) {
+    console.log('Refetching', person.name(), 'failed, message', error);
+    return person;
+  }
+  if (!('guid' in profile)) {
+    console.log(person.name(), 'not found, keeping it');
+    return person;
+  }
+  if (profile.guid !== person.id()) {
+    person = storeProfile(profile, person.id());
+    if (fetched.has(person.id())) {
+      return person;
+    }
+  }
+  db.updateAttributes(person.id(), profile);
+  fetched.add(person.id());
+  return person;
+}
+
+// Fetch person's profile and parents from Geni again, and set the parent
+// links from the answer. If a fetch fails, the stored data is kept.
+// If the profile was merged into another, the merge is recorded and the
+// other person is refreshed instead. Returns the person refreshed.
+// fetched is as for refetchProfile.
+async function refreshPerson(person, fetched) {
+  person = await refetchProfile(person, fetched);
+  const oldParents = person.parents;
+  const oldFather = person.father();
+  const oldMother = person.mother();
+  person.parents = undefined;
+  if (person.unions()) {
+    await addParents(person);
+  } else {
+    // Without unions, Geni knows no parents. But every ancestor is in a
+    // union with a partner, so this was not expected in a tree.
+    reportSurprise('a profile in a tree has no unions',
+                   `${person.name()} (${person.id()})`);
+    person.parents = [];
+  }
+  if (person.parents === undefined) {
+    person.parents = oldParents;
+    person.setFather(oldFather);
+    person.setMother(oldMother);
+    return person;
+  }
+  const parents = [];
+  let failed = false;
+  for (const parentUrl of person.parents) {
+    let parent = db.getByIdAttribute(urlToId(parentUrl));
+    if (parent) {
+      // The stored record may be out of date, for instance in gender,
+      // so fetch it again before using it. When the parent's own turn
+      // comes, it is not fetched again.
+      parent = await refetchProfile(parent, fetched);
+    } else {
+      parent = await addProfileByUrl(parentUrl);
+      if (parent) {
+        fetched.add(parent.id());
+      }
+    }
+    if (parent) {
+      parents.push(parent);
+    } else {
+      console.log('Unable to fetch', parentUrl);
+      failed = true;
+    }
+  }
+  // The parents are fresh from Geni now, so a mismatch is in Geni's data
+  // or in how the code reads it.
+  const fathers = parents.filter(parent => parent.gender() == 'male');
+  const mothers = parents.filter(parent => parent.gender() != 'male');
+  if (fathers.length > 1 || mothers.length > 1) {
+    reportSurprise(fathers.length > 1 ? 'two fathers'
+                   : 'two mothers, or a parent with unknown gender',
+                   `${person.name()} (${person.id()})`,
+                   parents.map(parent => ({
+                     name: parent.name(), id: parent.id(),
+                     gender: parent.gender(), fetched: fetched.has(parent.id())
+                   })));
+  }
+  const father = fathers.at(-1)?.id();
+  const mother = mothers.at(-1)?.id();
+  if (!failed && ((oldFather && !father) || (oldMother && !mother))) {
+    // Parents can be removed on Geni, but this may also mean that
+    // resolveParents missed them.
+    reportSurprise('known parents were not found again',
+                   `${person.name()} (${person.id()})`);
+  }
+  // If a parent could not be fetched, keep the old link in its place.
+  person.setFather(father ?? (failed ? oldFather : undefined));
+  person.setMother(mother ?? (failed ? oldMother : undefined));
+  return person;
+}
+
 // The ancestor count of person in [], as a link that fetches more
 // ancestors if there are few.
 function ancestorCount(person) {
@@ -664,6 +1006,7 @@ function ancestorCount(person) {
   link.textContent = count;
   link.addEventListener('click', event => {
     event.preventDefault();
+    startUserOperation();
     fetchMoreAncestors(person);
   });
   span.append('[', link, ']');
@@ -830,16 +1173,19 @@ groupSelectElement.addEventListener('change', async () => {
     newGroupBox.hidden = false;
     newGroupNameElement.focus();
   } else {
+    startUserOperation();
     await switchToGroup(groupSelectElement.value);
   }
 });
 
 newGroupCreateButton.addEventListener('click', () => {
+  startUserOperation();
   createNewGroup();
 });
 
 newGroupNameElement.addEventListener('keydown', event => {
   if (event.key === 'Enter') {
+    startUserOperation();
     createNewGroup();
   } else if (event.key === 'Escape') {
     cancelNewGroup();
@@ -851,6 +1197,7 @@ newGroupCancelButton.addEventListener('click', () => {
 });
 
 saveGroupButton.addEventListener('click', () => {
+  startUserOperation();
   saveGroupToFile();
 });
 
@@ -863,25 +1210,30 @@ loadGroupInput.addEventListener('change', async () => {
   // Reset so that choosing the same file again triggers a new change event.
   loadGroupInput.value = '';
   if (file) {
+    startUserOperation();
     await loadGroupFromFile(file);
   }
 });
 
 addProfileElement.addEventListener('change', async () => {
   console.log('Change event detected');
+  startUserOperation();
   addProfile();
 });
 
 addProfileButton.addEventListener('click', async () => {
   console.log('Click detected');
+  startUserOperation();
   addProfile();
 });
 
 saveDatabaseButton.addEventListener('click', async () => {
+  startUserOperation();
   await saveCurrentState();
 });
 
 exportFileButton.addEventListener('click', () => {
+  startUserOperation();
   exportToFile();
 });
 
@@ -894,11 +1246,13 @@ importFileInput.addEventListener('change', async () => {
   // Reset so that choosing the same file again triggers a new change event.
   importFileInput.value = '';
   if (file) {
+    startUserOperation();
     await importFromFile(file);
   }
 });
 
 buildTreeButton.addEventListener('click', async () => {
+  startUserOperation();
   startTreeBuild();
   try {
     await buildTree(Number(yearLimitElement.value));
@@ -912,10 +1266,12 @@ stopFetchingButton.addEventListener('click', () => {
 });
 
 recalculateGroupsButton.addEventListener('click', () => {
+  startUserOperation();
   buildAncestorGroups();
 });
 
 algorithmSelectElement.addEventListener('change', () => {
+  startUserOperation();
   localStorage.setItem(algorithmKey, algorithmSelectElement.value);
   buildAncestorGroups();
 });
