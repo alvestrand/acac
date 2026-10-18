@@ -831,6 +831,12 @@ function requestRefresh(person, birthYearAssumption, yearLimit) {
 // beyond the limit are left out without being marked as refreshed, so
 // that a request with a lower limit can still refresh them.
 async function runRefreshPool() {
+  // Let rebuildTree store this run in refreshRun before anything else
+  // happens. Otherwise, if the pool were finished without waiting for
+  // Geni, the finally clause below would clear refreshRun first, and
+  // later rebuilds would wait for this finished run instead of starting
+  // a new one.
+  await null;
   try {
     while (refreshPool.size > 0 && !client.stopped) {
       const [id, {birthYearAssumption, yearLimit}] =
