@@ -134,6 +134,7 @@ const yearLimitElement = document.getElementById('year-limit');
 const recalculateGroupsButton = document.getElementById('recalculate-groups');
 const groupListElement = document.getElementById('group-list');
 const algorithmSelectElement = document.getElementById('algorithm-select');
+const initialsOnlyElement = document.getElementById('initials-only');
 
 // Groups of profiles, saved in the browser's local storage.
 const groupStore = new GroupStore(localStorage);
@@ -227,6 +228,28 @@ function loadProfileList() {
   displayProfileList();
 }
 
+// The names of the profiles in the group can be replaced by their
+// initials on the page, so that a screenshot can be shared without
+// showing who the matches are. Ancestors keep their names.
+const initialsOnlyKey = 'initialsOnly';
+
+// The initials of a name, such as 'K. N. N.' for 'Kari Nilsdtr Nærum
+// (Lode)'. Parts in parentheses (birth names) are left out.
+function initials(name) {
+  return (name ?? '').replace(/\([^)]*\)/g, ' ')
+    .split(/\s+/).filter(Boolean)
+    .map(word => [...word][0].toUpperCase() + '.').join(' ');
+}
+
+// The name of person as shown on the page.
+function displayName(person) {
+  if (initialsOnlyElement.checked
+      && profileList.some(profile => profile.id() === person.id())) {
+    return initials(person.name());
+  }
+  return person.name();
+}
+
 // Returns a link that opens the person's Geni profile in a new tab.
 function profileLink(person) {
   const link = document.createElement('a');
@@ -234,7 +257,7 @@ function profileLink(person) {
     'https://www.geni.com/people/profile/' + person.guid();
   link.target = '_blank';
   link.rel = 'noopener';
-  link.textContent = person.name();
+  link.textContent = displayName(person);
   return link;
 }
 
@@ -327,7 +350,8 @@ function showAncestorCount(profile, cell, ancestors, source) {
          < person.parents.length)
     .map(person => describe(person.id()));
   reportSurprise('ancestor count went down',
-                 `${describe(profile.id())}: ${previous.size} to `
+                 `${displayName(profile)} (${profile.id()}): `
+                 + `${previous.size} to `
                  + `${ancestors.size}, in ${source}`,
                  {lost: [...lost].map(describe), suspects,
                   treeBuildsRunning});
@@ -487,7 +511,7 @@ let profileBeingFetched;
 
 function treeBuildingResult(person) {
   return (client.stopped ? 'Stopped' : 'Finished') + ' tree building for '
-    + person.name();
+    + displayName(person);
 }
 
 async function addProfile() {
@@ -515,17 +539,19 @@ async function addProfile() {
       const mergedTo = stored.attribute('merged_into');
       if (mergedTo === undefined) {
         // Profile is OK
-        addProfileMessage.innerText = stored.name() + ' already in DB';
+        addProfileMessage.innerText = displayName(stored) + ' already in DB';
         if (addNameToProfileList(stored)) {
           addProfileElement.value = '';
           console.log('Building tree for added person', stored.name());
-          addProfileMessage.innerText = 'Building tree for ' + stored.name();
+          addProfileMessage.innerText = 'Building tree for '
+            + displayName(stored);
           await buildTreeForPerson(stored, 2025, Number(yearLimitElement.value));
           buildAncestorGroups();
           addProfileMessage.innerText = treeBuildingResult(stored);
           return;
         }
-        addProfileMessage.innerText = stored.name() + ' is already in the group';
+        addProfileMessage.innerText = displayName(stored)
+          + ' is already in the group';
         return;
       }
       console.log('Following merged-to pointer', mergedTo);
@@ -544,7 +570,7 @@ async function addProfile() {
     addNameToProfileList(person);
     addProfileElement.value = '';
     console.log('Building tree for added person', person.name());
-    addProfileMessage.innerText = 'Building tree for ' + person.name();
+    addProfileMessage.innerText = 'Building tree for ' + displayName(person);
     await buildTreeForPerson(person, 2025, Number(yearLimitElement.value));
     buildAncestorGroups();
     addProfileMessage.innerText = treeBuildingResult(person);
@@ -815,7 +841,8 @@ async function fetchMoreAncestors(person) {
     if (!client.connected) {
       await connectToGeni();
     }
-    addProfileMessage.innerText = 'Fetching ancestors of ' + person.name();
+    addProfileMessage.innerText = 'Fetching ancestors of '
+      + displayName(person);
     await buildTreeForPerson(person, 2025, -Infinity, extraGenerations);
     buildAncestorGroups();
     addProfileMessage.innerText = treeBuildingResult(person);
@@ -909,13 +936,13 @@ async function rebuildTree(person) {
     if (!client.connected) {
       await connectToGeni();
     }
-    addProfileMessage.innerText = 'Rebuilding tree for ' + person.name();
+    addProfileMessage.innerText = 'Rebuilding tree for ' + displayName(person);
     requestRefresh(person, 2025, Number(yearLimitElement.value));
     refreshRun ??= runRefreshPool();
     await refreshRun;
     buildAncestorGroups();
     addProfileMessage.innerText = (client.stopped ? 'Stopped' : 'Finished')
-      + ' rebuilding tree for ' + person.name();
+      + ' rebuilding tree for ' + displayName(person);
   } catch (error) {
     console.log('Rebuilding tree failed, message ', error);
     addProfileMessage.innerText = 'Rebuilding tree failed, error '
@@ -974,7 +1001,7 @@ async function refreshPerson(person, fetched) {
     // Without unions, Geni knows no parents. But every ancestor is in a
     // union with a partner, so this was not expected in a tree.
     reportSurprise('a profile in a tree has no unions',
-                   `${person.name()} (${person.id()})`);
+                   `${displayName(person)} (${person.id()})`);
     person.parents = [];
   }
   if (person.parents === undefined) {
@@ -1012,7 +1039,7 @@ async function refreshPerson(person, fetched) {
   if (fathers.length > 1 || mothers.length > 1) {
     reportSurprise(fathers.length > 1 ? 'two fathers'
                    : 'two mothers, or a parent with unknown gender',
-                   `${person.name()} (${person.id()})`,
+                   `${displayName(person)} (${person.id()})`,
                    parents.map(parent => ({
                      name: parent.name(), id: parent.id(),
                      gender: parent.gender(), fetched: fetched.has(parent.id())
@@ -1024,7 +1051,7 @@ async function refreshPerson(person, fetched) {
     // Parents can be removed on Geni, but this may also mean that
     // resolveParents missed them.
     reportSurprise('known parents were not found again',
-                   `${person.name()} (${person.id()})`);
+                   `${displayName(person)} (${person.id()})`);
   }
   // If a parent could not be fetched, keep the old link in its place.
   person.setFather(father ?? (failed ? oldFather : undefined));
@@ -1110,7 +1137,7 @@ function displayAncestorGroups() {
   // People who share no ancestors with anyone are left out.
   ancestorGroups.filter(item => item.persons.length > 1).forEach(item => {
     const dt = document.createElement('dt');
-    const personArray = item.persons.map(person => person.name());
+    const personArray = item.persons.map(person => displayName(person));
     personArray.forEach(personName => {
       dt.appendChild(document.createTextNode(personName));
       dt.appendChild(document.createElement('br'));
@@ -1317,6 +1344,12 @@ recalculateGroupsButton.addEventListener('click', () => {
   buildAncestorGroups();
 });
 
+initialsOnlyElement.addEventListener('change', () => {
+  localStorage.setItem(initialsOnlyKey, initialsOnlyElement.checked);
+  displayProfileList();
+  displayAncestorGroups();
+});
+
 algorithmSelectElement.addEventListener('change', () => {
   startUserOperation();
   localStorage.setItem(algorithmKey, algorithmSelectElement.value);
@@ -1327,5 +1360,6 @@ algorithmSelectElement.addEventListener('change', () => {
 await loadDatabase(db);
 console.log('Database size', db.size());
 displayAlgorithmSelect();
+initialsOnlyElement.checked = localStorage.getItem(initialsOnlyKey) === 'true';
 selectGroup(groupStore.currentName());
 buildAncestorGroups();
