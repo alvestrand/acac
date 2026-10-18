@@ -70,10 +70,13 @@ is fetched with the user's Geni login and cached in the browser.
 - `tools/count_groups.js`: run by hand (`node tools/count_groups.js
   [file] [--algorithm=a,b] [--verbose]`) to compare the grouping
   algorithms on a saved database, by default `samples/database.json`.
-- `groups.js`: `GroupStore`, groups of member ids in localStorage.
+- `groups.js`: `GroupStore`, groups of member ids in localStorage, with
+  the members of each excluded from matching (profile menu).
 - `file_export.js`: save/load of the whole database, and of a single
   group with its members' ancestors (merge rule: replace a person only if
   Geni's `updated_at` is newer; keep parent links from either record).
+  Both formats carry the members excluded from matching; files without
+  them are still accepted.
 - `opfsdb.js`: database persistence in the Origin Private File System.
 - `simulations/`, `frontpage.html`: older experiments.
 

@@ -94,6 +94,13 @@ async function connectToGeni() {
 
 let profileList = [];
 let ancestorGroups = [];
+// Ids of the profiles in the current group excluded from matching by
+// the user. They are left out when the groups are computed.
+let excludedProfileIds = new Set();
+// Ids of the profiles that were alone in their group when the groups
+// were last computed. They are marked in the profile list. Profiles
+// added since then are not, as they have not been grouped yet.
+let ungroupedProfileIds = new Set();
 
 // Utility functions
 function isolateId(url) {
@@ -169,10 +176,16 @@ function currentProfileIds() {
   return profileList.map(p => p.id());
 }
 
+// The ids of the current group's members excluded from matching.
+function currentExcludedIds() {
+  return currentProfileIds().filter(id => excludedProfileIds.has(id));
+}
+
 // Save the database and the current group, same as the "Save database" button.
 async function saveCurrentState() {
   await saveDatabase(db);
   groupStore.save(currentGroup, currentProfileIds());
+  groupStore.saveExcluded(currentGroup, currentExcludedIds());
   groupStore.setCurrentName(currentGroup);
 }
 
@@ -180,7 +193,8 @@ async function saveCurrentState() {
 // and recalculate its ancestor groups.
 async function switchToGroup(name) {
   await saveDatabase(db);
-  groupStore.switchTo(currentGroup, currentProfileIds(), name);
+  groupStore.switchTo(currentGroup, currentProfileIds(), name,
+                     currentExcludedIds());
   selectGroup(name);
   buildAncestorGroups();
 }
@@ -208,6 +222,8 @@ function loadProfileList() {
       return undefined;
     }
   }).filter(profile => profile);
+  excludedProfileIds = new Set(
+    groupStore.excluded(currentGroup).map(id => db.currentId(id)));
   displayProfileList();
 }
 
@@ -234,7 +250,11 @@ function profileMenu(profile) {
   const rebuild = document.createElement('option');
   rebuild.value = 'rebuild';
   rebuild.textContent = 'Rebuild tree';
-  select.append(title, remove, rebuild);
+  const exclude = document.createElement('option');
+  exclude.value = 'exclude';
+  exclude.textContent = excludedProfileIds.has(profile.id())
+    ? 'Include in matching' : 'Exclude from matching';
+  select.append(title, remove, rebuild, exclude);
   select.addEventListener('change', () => {
     if (select.value !== '') {
       startUserOperation();
@@ -243,6 +263,8 @@ function profileMenu(profile) {
       removeFromProfileList(profile);
     } else if (select.value === 'rebuild') {
       rebuildTree(profile);
+    } else if (select.value === 'exclude') {
+      toggleExcluded(profile);
     }
     select.value = '';
   });
@@ -401,6 +423,11 @@ function displayProfileList() {
   const memo = new Map();
   sortedProfileList().forEach(profile => {
     const row = document.createElement('tr');
+    if (excludedProfileIds.has(profile.id())) {
+      row.classList.add('excluded');
+    } else if (ungroupedProfileIds.has(profile.id())) {
+      row.classList.add('ungrouped');
+    }
     const n = document.createElement('td');
     n.append(profileLink(profile));
     row.append(n);
@@ -437,11 +464,22 @@ function addNameToProfileList(person) {
   }
 }
 
+// Exclude a profile from matching, or include it again, and recompute
+// the groups. Like adding, this takes effect in storage when the group
+// is saved.
+function toggleExcluded(profile) {
+  if (!excludedProfileIds.delete(profile.id())) {
+    excludedProfileIds.add(profile.id());
+  }
+  buildAncestorGroups();
+}
+
 // Remove a profile from the current group. The person stays in the
 // database. Like adding, this takes effect in storage when the group
 // is saved.
 function removeFromProfileList(profile) {
   profileList = profileList.filter(entry => entry !== profile);
+  excludedProfileIds.delete(profile.id());
   buildAncestorGroups();
 }
 
@@ -591,6 +629,8 @@ function followMergesInProfileList() {
   const seen = new Set();
   profileList = profileList.map(entry => db.get(entry.id()) ?? entry)
     .filter(entry => !seen.has(entry) && seen.add(entry));
+  excludedProfileIds = new Set(
+    excludedProfileIds.values().map(id => db.currentId(id)));
 }
 
 // Fetch a profile by guid, following merges. Returns the person,
@@ -1054,8 +1094,12 @@ function displayAlgorithmSelect() {
 function buildAncestorGroups() {
   db.createAncestors();
   ancestorGroups = groupingAlgorithms[algorithmSelectElement.value](
-    profileList, db);
+    profileList.filter(profile => !excludedProfileIds.has(profile.id())),
+    db);
   console.log('Ancestor groups are', ancestorGroups);
+  ungroupedProfileIds = new Set(ancestorGroups
+    .filter(item => item.persons.length === 1)
+    .map(item => item.persons[0].id()));
   displayProfileList();
   displayAncestorGroups();
 }
@@ -1108,13 +1152,14 @@ function today() {
 
 function exportToFile() {
   const exported = exportToJsonString(db, groupStore, currentGroup,
-                                      currentProfileIds());
+                                      currentProfileIds(),
+                                      currentExcludedIds());
   downloadJson(exported, 'acac-' + today() + '.json');
 }
 
 function saveGroupToFile() {
   const exported = exportGroupToJsonString(currentGroup, currentProfileIds(),
-                                           db);
+                                           db, currentExcludedIds());
   const groupName = currentGroup === '' ? 'unnamed' : currentGroup;
   downloadJson(exported, 'acac-group-' + groupName + '-' + today() + '.json');
 }
@@ -1137,8 +1182,10 @@ async function loadGroupFromFile(file) {
   }
   const result = mergeGroupImport(imported, db);
   await saveDatabase(db);
-  groupStore.switchTo(currentGroup, currentProfileIds(), groupName);
+  groupStore.switchTo(currentGroup, currentProfileIds(), groupName,
+                     currentExcludedIds());
   groupStore.save(groupName, result.ids);
+  groupStore.saveExcluded(groupName, result.excluded);
   selectGroup(groupName);
   buildAncestorGroups();
   groupFileMessage.innerText = `Loaded ${imported.persons.length} profiles `

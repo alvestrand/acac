@@ -110,3 +110,31 @@ test('switchTo leaves other storage entries alone', () => {
   groupStore.switchTo('new', [], 'old');
   expect(storage.getItem('unrelated')).toBe('keep me');
 });
+
+test('excluded members are saved per group, and empty by default', () => {
+  const { storage, groupStore } = makeStore();
+  expect(groupStore.excluded('new')).toStrictEqual([]);
+  groupStore.saveExcluded('new', ['g3']);
+  expect(groupStore.excluded('new')).toStrictEqual(['g3']);
+  expect(groupStore.excluded('old')).toStrictEqual([]);
+  // Not taken for a group of its own.
+  expect(Object.keys(groupStore.groups()).sort())
+    .toStrictEqual(['new', 'old']);
+  groupStore.saveExcluded('new', []);
+  expect(storage.getItem('excludedSet-new')).toBeNull();
+});
+
+test('switchTo saves the excluded members of the group being left', () => {
+  const { groupStore } = makeStore();
+  groupStore.switchTo('new', ['g2', 'g3'], 'old', ['g2']);
+  expect(groupStore.excluded('new')).toStrictEqual(['g2']);
+  groupStore.switchTo('new', ['g2', 'g3'], 'old');
+  expect(groupStore.excluded('new')).toStrictEqual([]);
+});
+
+test('remove forgets the excluded members too', () => {
+  const { groupStore } = makeStore();
+  groupStore.saveExcluded('new', ['g2']);
+  groupStore.remove('new');
+  expect(groupStore.excluded('new')).toStrictEqual([]);
+});
