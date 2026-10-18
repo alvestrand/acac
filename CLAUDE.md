@@ -15,7 +15,8 @@ is fetched with the user's Geni login and cached in the browser.
   requests and pushes to main (free, since the repo is public).
 - The app is plain ES modules served as static files; open `index.html`.
   It reads the Geni app id from `.geni_app_id` (gitignored) next to it.
-- Tests cover the non-UI modules, including `display_functions.js`.
+- Tests cover the non-UI modules, including `display_functions.js` and
+  `tree_builder.js`.
   `index.js` (page code) has no tests;
   page changes must be tried in a browser, which Claude can't do, so say
   so when reporting.
@@ -27,13 +28,18 @@ is fetched with the user's Geni login and cached in the browser.
 
 ## Code layout
 
-- `index.js`: page logic. Adding profiles, tree building
-  (`buildTreeForPerson`, recursive, stops at the "back to" year limit;
-  `rebuildTree`, from the profile menu, fetches it all again through a
+- `index.js`: page logic. Adding profiles and starting tree builds
+  (messages, the profile list, the Build tree loop over the group),
+  group handling, file save/load, building the page's elements.
+- `tree_builder.js`: `TreeBuilder(client, db, hooks)`, all fetching
+  from Geni: `fetchProfileToAdd`, `buildTreeForPerson` (recursive, stops
+  at the "back to" year limit, doesn't fetch known profiles again) and
+  `rebuild` (from the profile menu; fetches it all again through a
   refresh pool shared by all running rebuilds, so that shared ancestors
   are refreshed once; the "already refreshed" set is only emptied when
-  the pool is empty),
-  group handling, file save/load, display.
+  the pool is empty). Unexpected answers call the `onSurprise` hook and
+  stop fetching; merges call `onMerge`. Tested with
+  `fake_geni_client.js`, a fake `GeniClient` holding a small family.
 - `async_geni.js`: `GeniClient`, a queue running one Geni request at a
   time. The next request starts as soon as the previous one is answered;
   on "Rate limit exceeded." it retries after 5 s. `stop()`/`start()` back
