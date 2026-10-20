@@ -82,6 +82,14 @@ class TreeBuilder {
     if ('merged_into' in profile) {
       this.#surprise(`more than ${maxMergeSteps} merges in a row`,
                      String(first.guid ?? first.id), first);
+    } else if (Object.keys(profile).length > 0 && !('name' in profile)) {
+      // Profiles are fetched with fields=, and it is not known whether
+      // Geni still answers merged_into then. A merged profile answered
+      // without it would look like this. Treat it as not found, so that
+      // it is not stored. (An empty answer means not found.)
+      this.#surprise('a profile has neither name nor merged_into',
+                     String(profile.guid ?? profile.id), profile);
+      return {};
     } else if (profile !== first && !('guid' in profile)) {
       this.#surprise('the profile merged into has no guid',
                      String(first.merged_into), profile);
@@ -182,16 +190,13 @@ class TreeBuilder {
       console.log('Already have parents on', person.name());
     }
     // Trigger fetching of parents.
-    console.log('Fetching unions');
     const strippedUnions = person.unions().map(str => {
       return str.split('-')[1];
     });
-    console.log('Stripped unions: ', strippedUnions);
     try {
       const result = await this.#client.getUnions(strippedUnions);
       if ('results' in result) {
         unions = result.results;
-        console.log('Unions fetched:', unions);
       } else if ('id' in result) {
         // When a single result is returned, it's returned
         // without a containing "results" array.
@@ -206,7 +211,6 @@ class TreeBuilder {
       return;
     }
     const parents = resolveParents(person, unions);
-    console.log('Parents found:', parents);
     // We don't know which parent is father at this point. Just store,
     // and resolve when we know more.
     person.parents = parents;

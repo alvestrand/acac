@@ -99,6 +99,23 @@ test('fetchProfileToAdd uses the database, and follows merges', async () => {
   expect(hooks.onSurprise).not.toHaveBeenCalled();
 });
 
+test('a profile with neither name nor merged_into is a surprise', async () => {
+  const geni = makeGeni();
+  const { db, hooks, builder } = makeBuilder(geni);
+  await addAndBuild(builder, 'g1');
+  // As if Geni left out merged_into of a merged profile.
+  geni.edit(2, 'name', undefined);
+  geni.edit(2, 'guid', undefined);
+  await builder.rebuild(db.get('g1'), yearLimit);
+  expect(hooks.onSurprise).toHaveBeenCalledWith(
+    'a profile has neither name nor merged_into', 'profile-2',
+    expect.objectContaining({ id: 'profile-2', gender: 'male' }));
+  expect(geni.stopped).toBe(true);
+  // The stored record is kept.
+  expect(db.get('g2').name()).toBe('Father');
+  expect(db.get('g1').father()).toBe('g2');
+});
+
 test('rebuild uses a gender corrected on Geni', async () => {
   const geni = makeGeni();
   const { db, hooks, builder } = makeBuilder(geni);

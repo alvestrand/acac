@@ -1,5 +1,6 @@
 import { jest } from '@jest/globals';
 import { GeniClient } from './async_geni.js';
+import { profileFields } from './geni_structures.js';
 
 // A fake Geni SDK. Each test sets apiHandler to control how Geni.api responds.
 let apiHandler;
@@ -45,12 +46,13 @@ test('connect rejects when not authorized', async () => {
   expect(client.connected).toBe(false);
 });
 
-test('getPerson requests the profile by guid and resolves with the data', async () => {
+test('getPerson requests the used fields of the profile by guid and resolves with the data', async () => {
   apiHandler = (operation, args, callback) => callback({ id: 'profile-1' });
   const client = new GeniClient('app');
   const result = await client.getPerson('1234');
   expect(Geni.api).toHaveBeenCalledWith(
-    '/profile-g1234', [], expect.any(Function));
+    '/profile-g1234', { fields: profileFields.join(',') },
+    expect.any(Function));
   expect(result).toEqual({ id: 'profile-1' });
 });
 
@@ -58,7 +60,8 @@ test('getPersonByUrl strips the API prefix from the url', async () => {
   const client = new GeniClient('app');
   await client.getPersonByUrl('https://www.geni.com/api/profile-42');
   expect(Geni.api).toHaveBeenCalledWith(
-    'profile-42', [], expect.any(Function));
+    'profile-42', { fields: profileFields.join(',') },
+    expect.any(Function));
 });
 
 test('getUnions passes the union ids as arguments', async () => {

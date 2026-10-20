@@ -3,7 +3,10 @@
 // It assumes that the Geni API is available in the global environment (todo: inject it)
 
 export { GeniClient };
-import { urlToId } from './geni_structures.js';
+import { urlToId, profileFields } from './geni_structures.js';
+
+// Parameters for profile requests: only the fields the app uses.
+const profileParams = { fields: profileFields.join(',') };
 
 // How long to wait before retrying when Geni says the rate limit
 // is exceeded, in milliseconds.
@@ -167,8 +170,8 @@ class GeniClient {
 
   async getPerson(guid) {
     return new Promise((resolve, reject) => {
-      const op = new GeniOperation('/profile' + '-g' + guid, [],
-                             resolve, reject);
+      const op = new GeniOperation('/profile' + '-g' + guid, profileParams,
+                                   resolve, reject);
       this.#enqueue(op);
     });
   }
@@ -176,7 +179,7 @@ class GeniClient {
   async getPersonByUrl(url) {
     return new Promise((resolve, reject) => {
       const urlOp = urlToId(url);
-      const op = new GeniOperation(urlOp, [], resolve, reject);
+      const op = new GeniOperation(urlOp, profileParams, resolve, reject);
       this.#enqueue(op);
     });
   }
