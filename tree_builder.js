@@ -82,6 +82,14 @@ class TreeBuilder {
     if ('merged_into' in profile) {
       this.#surprise(`more than ${maxMergeSteps} merges in a row`,
                      String(first.guid ?? first.id), first);
+    } else if (Object.keys(profile).length > 0 && !('name' in profile)) {
+      // Profiles are fetched with fields=, and it is not known whether
+      // Geni still answers merged_into then. A merged profile answered
+      // without it would look like this. Treat it as not found, so that
+      // it is not stored. (An empty answer means not found.)
+      this.#surprise('a profile has neither name nor merged_into',
+                     String(profile.guid ?? profile.id), profile);
+      return {};
     } else if (profile !== first && !('guid' in profile)) {
       this.#surprise('the profile merged into has no guid',
                      String(first.merged_into), profile);

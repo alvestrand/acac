@@ -51,8 +51,14 @@ class FakeGeniClient {
   }
 
   // Change a field of profile n, as when it is edited on Geni.
+  // An undefined value removes the field.
   edit(n, field, value) {
-    this.#profiles.get(`profile-${n}`)[field] = value;
+    const record = this.#profiles.get(`profile-${n}`);
+    if (value === undefined) {
+      delete record[field];
+    } else {
+      record[field] = value;
+    }
   }
 
   // Merge profile n into profile m: n is then answered with merged_into,

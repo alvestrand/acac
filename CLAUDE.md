@@ -112,7 +112,8 @@ Found by experiment (October 2026); the API docs are thin.
 - `fields=` works for choosing profile fields; a nested field such as
   `birth` comes back whole (`birth.date.year` included). Whether
   `merged_into` is still answered when `fields=` lists it is not yet
-  checked. Edges in graph answers can
+  checked; a profile answered with neither `name` nor `merged_into`
+  is reported as a surprise to catch it. Edges in graph answers can
   carry `rel_modifier` (e.g. `"foster"`) for non-birth children.
 - Merged profiles are answered with `merged_into` (a profile API URL),
   as the code assumes; not yet checked with the test page.
