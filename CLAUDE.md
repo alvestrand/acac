@@ -68,7 +68,10 @@ is fetched with the user's Geni login and cached in the browser.
   element building in `index.js`.
 - `geni_structures.js`: knowledge of Geni's data formats
   (`resolveParents` picks the birth union from a union list;
-  `isolateId` takes the guid or id from a typed profile URL).
+  `isolateId` takes the guid or id from a typed profile URL;
+  `profileFields` lists the profile fields the app uses, which
+  `GeniClient` asks for with `fields=` and the fake client keeps, so a
+  field read from a profile must be added there).
 - `ancestor_finder.js`: groups profiles by shared ancestors
   (`makeGroupList`, `removeInnerParents`). `makeGroupList` takes one of
   `scoringAlgorithms` as its second argument (default `sharedAncestors`);
@@ -106,7 +109,10 @@ Found by experiment (October 2026); the API docs are thin.
   "Permission denied". Its `generations` parameter fails with
   "comparison of Integer with String failed" whether sent as number or
   text. Don't use it for tree building.
-- `fields=` works for choosing profile fields. Edges in graph answers can
+- `fields=` works for choosing profile fields; a nested field such as
+  `birth` comes back whole (`birth.date.year` included). Whether
+  `merged_into` is still answered when `fields=` lists it is not yet
+  checked. Edges in graph answers can
   carry `rel_modifier` (e.g. `"foster"`) for non-birth children.
 - Merged profiles are answered with `merged_into` (a profile API URL),
   as the code assumes; not yet checked with the test page.

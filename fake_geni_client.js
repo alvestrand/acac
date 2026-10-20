@@ -1,9 +1,17 @@
 // A fake GeniClient holding a small family in memory, for testing code
 // that fetches from Geni. Profiles get the id 'profile-<n>' and the guid
 // 'g<n>'; unions the id 'union-<n>'. Answers are copies, shaped like
-// Geni's, and come asynchronously. Every request is logged in requests.
+// Geni's, and come asynchronously. Like GeniClient's requests, profile
+// answers hold only the fields in profileFields. Every request is logged
+// in requests.
 
-import { idToUrl, urlToId } from './geni_structures.js';
+import { idToUrl, urlToId, profileFields } from './geni_structures.js';
+
+// The fields of a profile record asked for with fields=.
+function onlyProfileFields(record = {}) {
+  return Object.fromEntries(Object.entries(record)
+    .filter(([field]) => profileFields.includes(field)));
+}
 
 class FakeGeniClient {
   // Map of profile id -> profile record.
@@ -82,12 +90,12 @@ class FakeGeniClient {
   // Unknown profiles are answered with an empty object.
   getPerson(guid) {
     return this.#answer('getPerson', guid, () =>
-      this.#profiles.get(`profile-${guid.slice(1)}`) ?? {});
+      onlyProfileFields(this.#profiles.get(`profile-${guid.slice(1)}`)));
   }
 
   getPersonByUrl(url) {
     return this.#answer('getPersonByUrl', url, () =>
-      this.#profiles.get(urlToId(url)) ?? {});
+      onlyProfileFields(this.#profiles.get(urlToId(url))));
   }
 
   // Like Geni, a single union is answered without a results list.

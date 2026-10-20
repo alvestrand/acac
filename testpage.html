@@ -14,7 +14,10 @@
   <p>
     Examples, as used by the main page:
     path <code>/profile-g6000000003987799076</code> with parameters
-    <code>{}</code> fetches a profile by guid;
+    <code>{"fields": "id,guid,..."}</code> fetches the fields the app uses
+    of a profile by guid (the parameters start out as this, with the
+    field list from <code>profileFields</code>), and with <code>{}</code>
+    all of the profile;
     path <code>/union</code> with parameters
     <code>{"ids": ["19647660", "12660231"]}</code> fetches several unions.
   </p>
@@ -34,10 +37,16 @@
   <pre id="answer"></pre>
 
   <script type="module">
+    import { profileFields } from './geni_structures.js';
+
     const pathElement = document.getElementById('path');
     const paramsElement = document.getElementById('params');
     const requestElement = document.getElementById('request');
     const answerElement = document.getElementById('answer');
+
+    // Start with the parameters the app uses for profile requests.
+    paramsElement.value = JSON.stringify(
+      { fields: profileFields.join(',') });
 
     const response = await fetch('.geni_app_id');
     if (!response.ok) {
