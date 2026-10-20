@@ -79,7 +79,6 @@ function mergeOverlappingGroups(groupList, score) {
   if (maxScore === 0) {
     return groupList;  // No change
   }
-  console.log('Merging', firstGroup.persons[0].name(), 'with', secondGroup.persons[0].name());
   firstGroup.mergeGroup(secondGroup);
   const newGroupList = groupList.filter(group => group != secondGroup);
   return newGroupList;
@@ -125,7 +124,6 @@ function makeGroupList(personList,
   let groupList = personList.map(person => new CommonAncestorGroup(person));
   let currentSize = groupList.length;
   while (true) {
-    console.log('Group list length is ', currentSize);
     groupList = merge(groupList, score);
     if (currentSize == groupList.length) {
       return groupList;
