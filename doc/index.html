@@ -1,31 +1,62 @@
+<!DOCTYPE html>
 <html>
   <head>
+    <meta charset="utf-8">
     <title>Getting started with ACAC</title>
+   <style>
+    img.illustration {
+      float: right;
+      max-width: 40%;
+      height: auto;
+      margin: 0 0 0.75em 1.5em;
+    }
+    p { display: flow-root; }
+    @media (max-width: 600px) {
+      img.illustration {
+        float: none;
+        display: block;
+        max-width: 100%;
+        margin: 0.75em auto;
+      }
+    }
+  </style>
+
   </head>
   <body>
     <h1>Getting started with ACAC</h1>
     <p>
       ACAC is a tool for figuring out all common ancestors for a group of people.
-      This only makes sense if the people are known to be related, such as matching
+      This only makes sense if the people are assumed to be related, such as
+      having matching
       DNA on a specific segment.
     </p>
     <p>
-      <img src="dnapainter-sample-group.png" width="40%">
-      <br
-      In DNAPainter, one may come across a block that looks like the red block
-      in the image. It's tempting to assume that this indicates descent from
-      a single ancestor. But which one?
+      There are three steps in finding ancestor groups:
+      <ol>
+	<li>Finding the group of matches</li>
+	<li>Finding the Geni profiles for the matches</li>
+	<li>Using ACAC to figure out the common ancestors</li>
+      </ol>
     </p>
+    <h2>Finding a group of relatives</h2>
     <p>
+      <img class="illustration" src="dnapainter-sample-group.png" width="40%">
+      In <a href="https://dnapainter.com">DNAPainter</a>, one may come across a block that looks like the red block
+      in the image. It's tempting to assume that this indicates descent from
+      a single ancestor. Note the names and whatever other identifying data
+      you have found in DNApainter, and go to the next step.
+    </p>
+    <h2>Finding the Geni profiles</h2>
+    <p>
+      <img class="illustration" src="arne-profile-url.png" width="60%">
       The next step is to find the entries in geni.com corresponding to those
       matches. This may involve searching, or even finding an ancestor
       somewhere in the tree and entering the tree from MyHeritage down to
       the match. In the end you have a profile, and the profile has an URL,
-      as seen in the top of the image below.
+      as seen in the top of the image.
     </p>
-    <p>
-      <img src="arne-profile-url.png" width="60%">
-    </p>
+    <h2>Using ACAC to figure out the common ancestors</h2>
+    <img class="illustration" src="acac-sample-group.png" width="60%">
     <p>
       Now go to <a href="https://acac.alvestrand.no/">ACAC</a> and
       create a group using the "New group" function in the pulldown.
@@ -36,10 +67,7 @@
       Then copy the URL found above into the "Add profile" field.
       ACAC will then (after asking permission) search Geni for the ancestors
       of that profile. And if we're lucky, we'll end up with a display like
-      this:
-    </p>
-    <p>
-      <img src="acac-sample-group.png" width="60%">
+      the one in the illustration, showing a set of ancestors for this particular segment.
     </p>
     <p>
       This means that all the people entered descend from those parents,
