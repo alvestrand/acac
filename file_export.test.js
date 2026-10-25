@@ -26,6 +26,7 @@ function makeSourceState() {
 
 test('Export and import round trip restores persons and groups', () => {
   const { db, groupStore } = makeSourceState();
+  groupStore.saveNotes('saved', 'Remember this family');
   const exported = exportToJsonString(db, groupStore, 'current', ['g2']);
 
   const db2 = new Database();
@@ -46,8 +47,10 @@ test('Export and import round trip restores persons and groups', () => {
   const groups = groupStore2.groups();
   expect(Object.keys(groups).sort()).toStrictEqual(['current', 'ids', 'saved']);
   expect(groups.saved).toStrictEqual(['g1']);
+  expect(groupStore2.notes('saved')).toBe('Remember this family');
   expect(groups.current).toStrictEqual(['g2']);
-  expect(JSON.parse(storage2.getItem('profileSet-saved'))).toStrictEqual(['g1']);
+  expect(JSON.parse(storage2.getItem('profileSet-saved')))
+    .toStrictEqual({ members: ['g1'], notes: 'Remember this family' });
 });
 
 test('Export includes current group even when not in storage', () => {
@@ -97,7 +100,8 @@ test('Import accepts files with whole person records in groups', () => {
   });
   const storage2 = new FakeStorage();
   applyImport(parseExport(oldFormat), new Database(), new GroupStore(storage2));
-  expect(JSON.parse(storage2.getItem('profileSet-old'))).toStrictEqual(['g1']);
+  expect(JSON.parse(storage2.getItem('profileSet-old')))
+    .toStrictEqual({ members: ['g1'], notes: '' });
 });
 
 test('parseExport rejects invalid JSON', () => {
