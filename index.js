@@ -103,6 +103,7 @@ let ungroupedProfileIds = new Set();
 
 // Get UI elements from HTML file.
 const groupSelectElement = document.getElementById('group-select');
+const groupNotesElement = document.getElementById('group-notes');
 const newGroupBox = document.getElementById('new-group-box');
 const newGroupNameElement = document.getElementById('new-group-name');
 const newGroupCreateButton = document.getElementById('new-group-create');
@@ -155,6 +156,7 @@ function selectGroup(name) {
   currentGroup = name;
   newGroupBox.hidden = true;
   displayGroupSelect();
+  groupNotesElement.value = groupStore.notes(name);
   loadProfileList();
 }
 
@@ -178,6 +180,7 @@ function currentExcludedIds() {
 async function saveCurrentState() {
   await saveDatabase(db);
   groupStore.save(currentGroup, currentProfileIds());
+  groupStore.saveNotes(currentGroup, groupNotesElement.value);
   groupStore.saveExcluded(currentGroup, currentExcludedIds());
   groupStore.setCurrentName(currentGroup);
 }
@@ -706,7 +709,8 @@ function exportToFile() {
 
 function saveGroupToFile() {
   const exported = exportGroupToJsonString(currentGroup, currentProfileIds(),
-                                           db, currentExcludedIds());
+                                           db, currentExcludedIds(),
+                                           groupNotesElement.value);
   downloadJson(exported, display.groupFileName(currentGroup, new Date()));
 }
 
@@ -731,6 +735,7 @@ async function loadGroupFromFile(file) {
   groupStore.switchTo(currentGroup, currentProfileIds(), groupName,
                      currentExcludedIds());
   groupStore.save(groupName, result.ids);
+  groupStore.saveNotes(groupName, imported.notes ?? '');
   groupStore.saveExcluded(groupName, result.excluded);
   selectGroup(groupName);
   buildAncestorGroups();
@@ -769,6 +774,10 @@ groupSelectElement.addEventListener('change', async () => {
     startUserOperation();
     await switchToGroup(groupSelectElement.value);
   }
+});
+
+groupNotesElement.addEventListener('input', () => {
+  groupStore.saveNotes(currentGroup, groupNotesElement.value);
 });
 
 newGroupCreateButton.addEventListener('click', () => {

@@ -13,17 +13,23 @@ function exportToJsonString(db, groupStore, currentGroup, currentProfileIds,
   const groups = groupStore.groups();
   groups[currentGroup] = currentProfileIds;
   const excluded = {};
+  const notes = {};
   for (const name of Object.keys(groups)) {
     const ids = name === currentGroup ? currentExcludedIds
           : groupStore.excluded(name);
     if (ids.length > 0) {
       excluded[name] = ids;
     }
+    const groupNotes = groupStore.notes(name);
+    if (groupNotes !== '') {
+      notes[name] = groupNotes;
+    }
   }
   return JSON.stringify({
     ...db.toJsonObject(),
     groups: groups,
     excluded: excluded,
+    groupNotes: notes,
     currentGroup: currentGroup
   }, null, 2);
 }
@@ -52,6 +58,7 @@ function applyImport(imported, db, groupStore) {
   for (const [name, profiles] of Object.entries(imported.groups)) {
     groupStore.save(name, profileIds(profiles));
     groupStore.saveExcluded(name, imported.excluded?.[name] ?? []);
+    groupStore.saveNotes(name, imported.groupNotes?.[name] ?? '');
   }
   const currentGroup = imported.currentGroup ?? '';
   groupStore.setCurrentName(currentGroup);
@@ -76,11 +83,12 @@ function groupPersons(memberIds, db) {
 
 // Represent a group as a JSON string.
 function exportGroupToJsonString(groupName, memberIds, db,
-                                 excludedIds = []) {
+                                 excludedIds = [], notes = '') {
   return JSON.stringify({
     groupName: groupName,
     members: memberIds,
     excluded: excludedIds,
+    notes: notes,
     persons: groupPersons(memberIds, db)
   }, null, 2);
 }
@@ -95,6 +103,7 @@ function parseGroupExport(data) {
       || (imported.excluded !== undefined
           && !(Array.isArray(imported.excluded)
                && imported.excluded.every(id => typeof id === 'string')))
+      || (imported.notes !== undefined && typeof imported.notes !== 'string')
       || !Array.isArray(imported.persons)
       || !imported.persons.every(person => typeof person?.id === 'string'
                                  && typeof person.attributes === 'object'
