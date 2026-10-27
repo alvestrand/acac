@@ -15,21 +15,22 @@ import { readFileSync } from 'node:fs';
 import { Database } from '../database.js';
 import { parseExport } from '../file_export.js';
 import { profileIds } from '../groups.js';
-import { groupingAlgorithms, removeInnerParents }
-  from '../ancestor_finder.js';
+import { groupingAlgorithms, removeInnerParents } from '../ancestor_finder.js';
 
 const args = process.argv.slice(2);
 const verbose = args.includes('--verbose');
-const fileName = args.find(arg => !arg.startsWith('--'))
-  ?? 'samples/database.json';
-const algorithmArg = args.find(arg => arg.startsWith('--algorithm='));
+const fileName =
+  args.find((arg) => !arg.startsWith('--')) ?? 'samples/database.json';
+const algorithmArg = args.find((arg) => arg.startsWith('--algorithm='));
 const algorithmNames = algorithmArg
   ? algorithmArg.substring('--algorithm='.length).split(',')
   : Object.keys(groupingAlgorithms);
 for (const name of algorithmNames) {
   if (!(name in groupingAlgorithms)) {
-    console.error(`Unknown algorithm '${name}'. Known:`,
-                  Object.keys(groupingAlgorithms).join(', '));
+    console.error(
+      `Unknown algorithm '${name}'. Known:`,
+      Object.keys(groupingAlgorithms).join(', '),
+    );
     process.exit(1);
   }
 }
@@ -38,8 +39,10 @@ const imported = parseExport(readFileSync(fileName, 'utf8'));
 const db = new Database();
 db.fromJsonObject(imported);
 db.createAncestors();
-console.log(`${fileName}: ${db.size()} persons,`,
-            `${Object.keys(imported.groups).length} groups`);
+console.log(
+  `${fileName}: ${db.size()} persons,`,
+  `${Object.keys(imported.groups).length} groups`,
+);
 
 // ancestor_finder.js logs a lot; keep it quiet unless asked.
 const log = console.log;
@@ -63,33 +66,43 @@ function closestGenerations(group) {
   return Math.min(...group.generations.values());
 }
 
-const width = Math.max(...algorithmNames.map(name => name.length));
+const width = Math.max(...algorithmNames.map((name) => name.length));
 
 for (const [name, entries] of Object.entries(imported.groups)) {
   const ids = profileIds(entries);
-  const persons = ids.map(id => db.get(id)).filter(person => person);
+  const persons = ids.map((id) => db.get(id)).filter((person) => person);
   const missing = ids.length - persons.length;
-  log(`\nGroup '${name}': ${ids.length} members`
-      + (missing ? ` (${missing} not in database)` : ''));
+  log(
+    `\nGroup '${name}': ${ids.length} members` +
+      (missing ? ` (${missing} not in database)` : ''),
+  );
   for (const algorithm of algorithmNames) {
-    const groups = quietly(
-      () => groupingAlgorithms[algorithm](persons, db));
-    const shared = groups.filter(group => group.persons.length > 1);
-    log(`  ${algorithm.padEnd(width)}  ${groups.length} ancestor groups,`,
-        `${shared.length} with more than one member;`,
-        'sizes', shared.map(group => group.persons.length).join(',') || '-',
-        'generations', shared.map(closestGenerations).join(',') || '-');
+    const groups = quietly(() => groupingAlgorithms[algorithm](persons, db));
+    const shared = groups.filter((group) => group.persons.length > 1);
+    log(
+      `  ${algorithm.padEnd(width)}  ${groups.length} ancestor groups,`,
+      `${shared.length} with more than one member;`,
+      'sizes',
+      shared.map((group) => group.persons.length).join(',') || '-',
+      'generations',
+      shared.map(closestGenerations).join(',') || '-',
+    );
     if (verbose) {
       groups.forEach((group, index) => {
-        log(`    ${index + 1}: ${group.persons.length} persons,`,
-            `${group.ancestors.size} common ancestors`);
-        group.persons.forEach(
-          person => log(`         member ${describe(person)}`));
+        log(
+          `    ${index + 1}: ${group.persons.length} persons,`,
+          `${group.ancestors.size} common ancestors`,
+        );
+        group.persons.forEach((person) =>
+          log(`         member ${describe(person)}`),
+        );
         if (group.persons.length > 1) {
-          const closest = quietly(
-            () => removeInnerParents(db, group.ancestors));
-          closest.forEach(
-            person => log(`         closest ${describe(person)}`));
+          const closest = quietly(() =>
+            removeInnerParents(db, group.ancestors),
+          );
+          closest.forEach((person) =>
+            log(`         closest ${describe(person)}`),
+          );
         }
       });
     }

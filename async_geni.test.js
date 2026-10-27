@@ -13,7 +13,8 @@ beforeEach(() => {
     init: jest.fn(),
     connect: jest.fn(),
     api: jest.fn((operation, args, callback) =>
-      apiHandler(operation, args, callback)),
+      apiHandler(operation, args, callback),
+    ),
   };
 });
 
@@ -27,11 +28,12 @@ afterEach(() => {
 test('Constructor initializes Geni with the app id', () => {
   new GeniClient('my-app');
   expect(Geni.init).toHaveBeenCalledWith(
-    expect.objectContaining({ app_id: 'my-app' }));
+    expect.objectContaining({ app_id: 'my-app' }),
+  );
 });
 
 test('connect resolves when authorized, and only connects once', async () => {
-  Geni.connect.mockImplementation(cb => cb({ status: 'authorized' }));
+  Geni.connect.mockImplementation((cb) => cb({ status: 'authorized' }));
   const client = new GeniClient('app');
   await client.connect();
   expect(client.connected).toBe(true);
@@ -40,7 +42,7 @@ test('connect resolves when authorized, and only connects once', async () => {
 });
 
 test('connect rejects when not authorized', async () => {
-  Geni.connect.mockImplementation(cb => cb({ status: 'unauthorized' }));
+  Geni.connect.mockImplementation((cb) => cb({ status: 'unauthorized' }));
   const client = new GeniClient('app');
   await expect(client.connect()).rejects.toMatch('unauthorized');
   expect(client.connected).toBe(false);
@@ -51,8 +53,10 @@ test('getPerson requests the used fields of the profile by guid and resolves wit
   const client = new GeniClient('app');
   const result = await client.getPerson('1234');
   expect(Geni.api).toHaveBeenCalledWith(
-    '/profile-g1234', { fields: profileFields.join(',') },
-    expect.any(Function));
+    '/profile-g1234',
+    { fields: profileFields.join(',') },
+    expect.any(Function),
+  );
   expect(result).toEqual({ id: 'profile-1' });
 });
 
@@ -60,15 +64,20 @@ test('getPersonByUrl strips the API prefix from the url', async () => {
   const client = new GeniClient('app');
   await client.getPersonByUrl('https://www.geni.com/api/profile-42');
   expect(Geni.api).toHaveBeenCalledWith(
-    'profile-42', { fields: profileFields.join(',') },
-    expect.any(Function));
+    'profile-42',
+    { fields: profileFields.join(',') },
+    expect.any(Function),
+  );
 });
 
 test('getUnions passes the union ids as arguments', async () => {
   const client = new GeniClient('app');
   await client.getUnions(['union-1', 'union-2']);
   expect(Geni.api).toHaveBeenCalledWith(
-    '/union', { ids: ['union-1', 'union-2'] }, expect.any(Function));
+    '/union',
+    { ids: ['union-1', 'union-2'] },
+    expect.any(Function),
+  );
 });
 
 test('A Geni error rejects the promise', async () => {
@@ -79,7 +88,9 @@ test('A Geni error rejects the promise', async () => {
 });
 
 test('An exception thrown by Geni.api rejects the promise', async () => {
-  apiHandler = () => { throw new Error('boom'); };
+  apiHandler = () => {
+    throw new Error('boom');
+  };
   const client = new GeniClient('app');
   await expect(client.getPerson('1')).rejects.toThrow('boom');
 });
@@ -93,8 +104,9 @@ test('Rate-limited operations are retried with unmodified args', async () => {
     // Emulate Geni mutating the args it is given.
     args.ids.push('garbage');
     if (calls == 1) {
-      callback({ error: { type: 'ApiException',
-                          message: 'Rate limit exceeded.' } });
+      callback({
+        error: { type: 'ApiException', message: 'Rate limit exceeded.' },
+      });
     } else {
       callback({ ok: true });
     }
@@ -115,7 +127,7 @@ test('Operations are executed one at a time, in order', async () => {
   apiHandler = (operation, args, callback) => pending.push(callback);
   const client = new GeniClient('app');
   const queueSizes = [];
-  client.queueSizeView = size => queueSizes.push(size);
+  client.queueSizeView = (size) => queueSizes.push(size);
 
   const first = client.getPerson('1');
   const second = client.getPerson('2');
@@ -143,8 +155,9 @@ test('Rate-limited operations are retried only after the delay', () => {
   const pending = [];
   apiHandler = (operation, args, callback) => {
     if (rateLimited) {
-      callback({ error: { type: 'ApiException',
-                          message: 'Rate limit exceeded.' } });
+      callback({
+        error: { type: 'ApiException', message: 'Rate limit exceeded.' },
+      });
     } else {
       pending.push(callback);
     }
@@ -196,8 +209,9 @@ test('queueSizeView reports waiting while rate limited', async () => {
   let rateLimited = true;
   apiHandler = (operation, args, callback) => {
     if (rateLimited) {
-      callback({ error: { type: 'ApiException',
-                          message: 'Rate limit exceeded.' } });
+      callback({
+        error: { type: 'ApiException', message: 'Rate limit exceeded.' },
+      });
     } else {
       callback({ ok: true });
     }
@@ -224,11 +238,13 @@ test('queueSizeView does not report waiting for a normal queue', () => {
   client.queueSizeView = (size, waiting) => views.push([size, waiting]);
   client.getPerson('1');
   client.getPerson('2');
-  expect(views).toEqual([[1, false], [2, false]]);
+  expect(views).toEqual([
+    [1, false],
+    [2, false],
+  ]);
 });
 
-test('stop rejects queued operations and ignores the running one',
-     async () => {
+test('stop rejects queued operations and ignores the running one', async () => {
   const pending = [];
   apiHandler = (operation, args, callback) => pending.push(callback);
   const client = new GeniClient('app');
@@ -263,8 +279,9 @@ test('stop rejects new operations until start', async () => {
 
 test('stop cancels a pending rate limit retry', async () => {
   apiHandler = (operation, args, callback) =>
-    callback({ error: { type: 'ApiException',
-                        message: 'Rate limit exceeded.' } });
+    callback({
+      error: { type: 'ApiException', message: 'Rate limit exceeded.' },
+    });
   const client = new GeniClient('app');
   const promise = client.getPerson('1');
   client.stop();

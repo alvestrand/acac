@@ -1,22 +1,23 @@
 import { Person, Database } from './database.js';
 import { GeniClient } from './async_geni.js';
 import { isolateId } from './geni_structures.js';
-import { loadDatabase,
-         saveDatabase } from './opfsdb.js';
+import { loadDatabase, saveDatabase } from './opfsdb.js';
 import { GroupStore } from './groups.js';
-import { exportToJsonString,
-         parseExport,
-         applyImport,
-         exportGroupToJsonString,
-         parseGroupExport,
-         mergeGroupImport } from './file_export.js';
+import {
+  exportToJsonString,
+  parseExport,
+  applyImport,
+  exportGroupToJsonString,
+  parseGroupExport,
+  mergeGroupImport,
+} from './file_export.js';
 import { groupingAlgorithms } from './ancestor_finder.js';
 import * as display from './display_functions.js';
 import { TreeBuilder } from './tree_builder.js';
 
-let db = new Database;
+let db = new Database();
 const cacheSizeElement = document.getElementById('cache-size');
-db.sizeView = number => {
+db.sizeView = (number) => {
   cacheSizeElement.innerText = number;
 };
 
@@ -60,7 +61,7 @@ try {
     console.log('Fetching Geni API key failed');
     showErrorMessage('Install error: Geni API key missing', true);
   }
-} catch(err) {
+} catch (err) {
   console.log('Fetching Geni API threw, error ', err);
   showErrorMessage('Install error: Geni API key missing', true);
 }
@@ -75,10 +76,10 @@ client.queueSizeView = (number, waiting) => {
   if (number === 0) {
     queueSizeElement.innerText = 'Queue empty';
   } else {
-    queueSizeElement.innerText = 'Queue size: ' + number
-      + (waiting ? ' waiting' : '');
+    queueSizeElement.innerText =
+      'Queue size: ' + number + (waiting ? ' waiting' : '');
   }
-}
+};
 
 // Connect to Geni, keeping the error message in sync with login status.
 async function connectToGeni() {
@@ -140,7 +141,7 @@ let newGroupOption;
 // group even if it hasn't been saved, and select the current group.
 function displayGroupSelect() {
   groupSelectElement.innerHTML = '';
-  groupStore.names(currentGroup).forEach(name => {
+  groupStore.names(currentGroup).forEach((name) => {
     const option = document.createElement('option');
     option.value = name;
     option.textContent = name === '' ? '(unnamed)' : name;
@@ -168,12 +169,12 @@ function cancelNewGroup() {
 }
 
 function currentProfileIds() {
-  return profileList.map(p => p.id());
+  return profileList.map((p) => p.id());
 }
 
 // The ids of the current group's members excluded from matching.
 function currentExcludedIds() {
-  return currentProfileIds().filter(id => excludedProfileIds.has(id));
+  return currentProfileIds().filter((id) => excludedProfileIds.has(id));
 }
 
 // Save the database and the current group, same as the "Save database" button.
@@ -189,8 +190,12 @@ async function saveCurrentState() {
 // and recalculate its ancestor groups.
 async function switchToGroup(name) {
   await saveDatabase(db);
-  groupStore.switchTo(currentGroup, currentProfileIds(), name,
-                     currentExcludedIds());
+  groupStore.switchTo(
+    currentGroup,
+    currentProfileIds(),
+    name,
+    currentExcludedIds(),
+  );
   selectGroup(name);
   buildAncestorGroups();
 }
@@ -206,20 +211,24 @@ async function createNewGroup() {
 function loadProfileList() {
   // Entries are ids. Older versions stored whole person records,
   // which can be used if the person is missing from the database.
-  profileList = groupStore.entries(currentGroup).map(entry => {
-    const id = typeof entry === 'string' ? entry : entry.id;
-    const profile = db.get(id);
-    if (profile) {
-      return profile;
-    } else if (entry.attributes) {
-      return db.addWithAttributes(id, entry.attributes);
-    } else {
-      console.log('Group member', id, 'not found in database');
-      return undefined;
-    }
-  }).filter(profile => profile);
+  profileList = groupStore
+    .entries(currentGroup)
+    .map((entry) => {
+      const id = typeof entry === 'string' ? entry : entry.id;
+      const profile = db.get(id);
+      if (profile) {
+        return profile;
+      } else if (entry.attributes) {
+        return db.addWithAttributes(id, entry.attributes);
+      } else {
+        console.log('Group member', id, 'not found in database');
+        return undefined;
+      }
+    })
+    .filter((profile) => profile);
   excludedProfileIds = new Set(
-    groupStore.excluded(currentGroup).map(id => db.currentId(id)));
+    groupStore.excluded(currentGroup).map((id) => db.currentId(id)),
+  );
   displayProfileList();
 }
 
@@ -229,14 +238,18 @@ const initialsOnlyKey = 'initialsOnly';
 
 // The name of person as shown on the page (see display.displayName).
 function displayName(person) {
-  return display.displayName(person, initialsOnlyElement.checked,
-                             new Set(currentProfileIds()));
+  return display.displayName(
+    person,
+    initialsOnlyElement.checked,
+    new Set(currentProfileIds()),
+  );
 }
 
 // Returns a link that opens the person's Geni profile in a new tab.
 function profileLink(person) {
   const link = document.createElement('a');
-  link.href = person.attribute('profile_url') ||
+  link.href =
+    person.attribute('profile_url') ||
     'https://www.geni.com/people/profile/' + person.guid();
   link.target = '_blank';
   link.rel = 'noopener';
@@ -259,7 +272,8 @@ function profileMenu(profile) {
   const exclude = document.createElement('option');
   exclude.value = 'exclude';
   exclude.textContent = excludedProfileIds.has(profile.id())
-    ? 'Include in matching' : 'Exclude from matching';
+    ? 'Include in matching'
+    : 'Exclude from matching';
   select.append(title, remove, rebuild, exclude);
   select.addEventListener('change', () => {
     if (select.value !== '') {
@@ -312,32 +326,40 @@ function showAncestorCount(profile, cell, ancestors, source) {
   cell.textContent = ancestors.size;
   const previous = shownAncestors.get(profile.id());
   shownAncestors.set(profile.id(), ancestors);
-  const drop = display.ancestorCountDrop(previous, ancestors, profile.id(),
-                                         db);
+  const drop = display.ancestorCountDrop(previous, ancestors, profile.id(), db);
   if (!drop) {
     return;
   }
-  const describe = id => `${db.get(id)?.name()} (${id})`;
-  reportSurprise('ancestor count went down',
-                 `${displayName(profile)} (${profile.id()}): `
-                 + `${previous.size} to `
-                 + `${ancestors.size}, in ${source}`,
-                 {lost: drop.lost.map(describe),
-                  suspects: drop.suspects.map(describe),
-                  treeBuildsRunning});
+  const describe = (id) => `${db.get(id)?.name()} (${id})`;
+  reportSurprise(
+    'ancestor count went down',
+    `${displayName(profile)} (${profile.id()}): ` +
+      `${previous.size} to ` +
+      `${ancestors.size}, in ${source}`,
+    {
+      lost: drop.lost.map(describe),
+      suspects: drop.suspects.map(describe),
+      treeBuildsRunning,
+    },
+  );
 }
 
 // Update the ancestor counts and completeness indexes in the profile
 // list without redrawing it.
 function displayRunningCounts() {
   ancestorCountCells.forEach((cell, profile) => {
-    showAncestorCount(profile, cell, db.ancestorIds(profile.id()),
-                      'running counts');
+    showAncestorCount(
+      profile,
+      cell,
+      db.ancestorIds(profile.id()),
+      'running counts',
+    );
   });
   const memo = new Map();
   completenessCells.forEach((cell, profile) => {
     cell.textContent = display.formatCompleteness(
-      db.completenessIndex(profile.id(), memo));
+      db.completenessIndex(profile.id(), memo),
+    );
   });
 }
 
@@ -349,7 +371,7 @@ let profileSortReversed = false;
 
 function sortProfileList(column) {
   ({ column: profileSortColumn, reversed: profileSortReversed } =
-   display.nextSortState(column, profileSortColumn, profileSortReversed));
+    display.nextSortState(column, profileSortColumn, profileSortReversed));
   displayProfileList();
 }
 
@@ -358,10 +380,11 @@ function sortHeading(text, column) {
   const th = document.createElement('th');
   const link = document.createElement('a');
   link.href = '#';
-  link.textContent = text + display.sortIndicator(
-    column, profileSortColumn, profileSortReversed);
+  link.textContent =
+    text +
+    display.sortIndicator(column, profileSortColumn, profileSortReversed);
   link.title = 'Sort on this column; click again to reverse';
-  link.addEventListener('click', event => {
+  link.addEventListener('click', (event) => {
     event.preventDefault();
     sortProfileList(column);
   });
@@ -377,49 +400,61 @@ function displayProfileList() {
   const th = document.createElement('tr');
   const ancestorsHeading = document.createElement('th');
   ancestorsHeading.textContent = 'Ancestors';
-  th.append(sortHeading('Name', 'name'), ancestorsHeading,
-            sortHeading('Generations', 'generations'),
-            document.createElement('th'));
+  th.append(
+    sortHeading('Name', 'name'),
+    ancestorsHeading,
+    sortHeading('Generations', 'generations'),
+    document.createElement('th'),
+  );
   table.append(th);
 
   // The generations are worked out from the parent links, like the
   // running counts, so that they match the sort order.
   const memo = new Map();
-  display.sortProfiles(profileList, profileSortColumn, profileSortReversed,
-                       db).forEach(profile => {
-    const row = document.createElement('tr');
-    const rowClass = display.profileRowClass(
-      profile.id(), excludedProfileIds, ungroupedProfileIds);
-    if (rowClass) {
-      row.classList.add(rowClass);
-    }
-    const n = document.createElement('td');
-    n.append(profileLink(profile));
-    row.append(n);
-    const a = document.createElement('td');
-    // From the parent links, like the running counts: the ancestor sets
-    // are only built when fetching is finished, so during a fetch they
-    // would show older, lower counts.
-    showAncestorCount(profile, a, db.ancestorIds(profile.id()),
-                      'profile list');
-    ancestorCountCells.set(profile, a);
-    row.append(a);
-    const c = document.createElement('td');
-    c.textContent = display.formatCompleteness(
-      db.completenessIndex(profile.id(), memo));
-    c.title = 'Complete generations: -log2(1 - completeness index)';
-    completenessCells.set(profile, c);
-    row.append(c);
-    const m = document.createElement('td');
-    m.append(profileMenu(profile));
-    row.append(m);
-    table.append(row);
-  });
+  display
+    .sortProfiles(profileList, profileSortColumn, profileSortReversed, db)
+    .forEach((profile) => {
+      const row = document.createElement('tr');
+      const rowClass = display.profileRowClass(
+        profile.id(),
+        excludedProfileIds,
+        ungroupedProfileIds,
+      );
+      if (rowClass) {
+        row.classList.add(rowClass);
+      }
+      const n = document.createElement('td');
+      n.append(profileLink(profile));
+      row.append(n);
+      const a = document.createElement('td');
+      // From the parent links, like the running counts: the ancestor sets
+      // are only built when fetching is finished, so during a fetch they
+      // would show older, lower counts.
+      showAncestorCount(
+        profile,
+        a,
+        db.ancestorIds(profile.id()),
+        'profile list',
+      );
+      ancestorCountCells.set(profile, a);
+      row.append(a);
+      const c = document.createElement('td');
+      c.textContent = display.formatCompleteness(
+        db.completenessIndex(profile.id(), memo),
+      );
+      c.title = 'Complete generations: -log2(1 - completeness index)';
+      completenessCells.set(profile, c);
+      row.append(c);
+      const m = document.createElement('td');
+      m.append(profileMenu(profile));
+      row.append(m);
+      table.append(row);
+    });
   profileListElement.append(table);
 }
 
 function addNameToProfileList(person) {
-  if (profileList.find(entry => entry.guid() == person.guid())) {
+  if (profileList.find((entry) => entry.guid() == person.guid())) {
     console.log('Profile already in list');
     return false;
   } else {
@@ -443,7 +478,7 @@ function toggleExcluded(profile) {
 // database. Like adding, this takes effect in storage when the group
 // is saved.
 function removeFromProfileList(profile) {
-  profileList = profileList.filter(entry => entry !== profile);
+  profileList = profileList.filter((entry) => entry !== profile);
   excludedProfileIds.delete(profile.id());
   buildAncestorGroups();
 }
@@ -478,21 +513,24 @@ async function addProfile() {
       return;
     }
     if (!addNameToProfileList(person)) {
-      addProfileMessage.innerText = displayName(person)
-        + ' is already in the group';
+      addProfileMessage.innerText =
+        displayName(person) + ' is already in the group';
       return;
     }
     addProfileElement.value = '';
     console.log('Building tree for added person', person.name());
     addProfileMessage.innerText = 'Building tree for ' + displayName(person);
-    await treeBuilder.buildTreeForPerson(person, 2025,
-                                         Number(yearLimitElement.value));
+    await treeBuilder.buildTreeForPerson(
+      person,
+      2025,
+      Number(yearLimitElement.value),
+    );
     buildAncestorGroups();
     addProfileMessage.innerText = treeBuildingResult(person);
   } catch (error) {
     console.log('Add failed, message ', error);
-    addProfileMessage.innerText = 'Add failed, error '
-      + (error?.message ?? JSON.stringify(error));
+    addProfileMessage.innerText =
+      'Add failed, error ' + (error?.message ?? JSON.stringify(error));
     return;
   } finally {
     profileBeingFetched = undefined;
@@ -503,8 +541,13 @@ async function addProfile() {
 // An answer from Geni did not match what the code expects (see
 // TreeBuilder): show it on the page. Fetching is stopped.
 function showSurprise(kind, details) {
-  showErrorMessage('Unexpected Geni answer: ' + kind + ' (' + details
-                   + '). Fetching stopped; see the console for more.');
+  showErrorMessage(
+    'Unexpected Geni answer: ' +
+      kind +
+      ' (' +
+      details +
+      '). Fetching stopped; see the console for more.',
+  );
 }
 
 // Show an unexpected finding of the page's own, and stop fetching.
@@ -517,17 +560,21 @@ function reportSurprise(kind, details, answer) {
 // Replace persons in the profile list that have been merged into others.
 function followMergesInProfileList() {
   const seen = new Set();
-  profileList = profileList.map(entry => db.get(entry.id()) ?? entry)
-    .filter(entry => !seen.has(entry) && seen.add(entry));
+  profileList = profileList
+    .map((entry) => db.get(entry.id()) ?? entry)
+    .filter((entry) => !seen.has(entry) && seen.add(entry));
   excludedProfileIds = new Set(
-    excludedProfileIds.values().map(id => db.currentId(id)));
+    excludedProfileIds.values().map((id) => db.currentId(id)),
+  );
 }
 
 const treeBuilder = new TreeBuilder(client, db, {
   onSurprise: showSurprise,
   onMerge: followMergesInProfileList,
-  onMessage: text => { addProfileMessage.innerText = text; },
-  name: displayName
+  onMessage: (text) => {
+    addProfileMessage.innerText = text;
+  },
+  name: displayName,
 });
 
 // Number of tree builds running, from the Build tree or the Add button.
@@ -574,16 +621,21 @@ async function fetchMoreAncestors(person) {
     if (!client.connected) {
       await connectToGeni();
     }
-    addProfileMessage.innerText = 'Fetching ancestors of '
-      + displayName(person);
-    await treeBuilder.buildTreeForPerson(person, 2025, -Infinity,
-                                         extraGenerations);
+    addProfileMessage.innerText =
+      'Fetching ancestors of ' + displayName(person);
+    await treeBuilder.buildTreeForPerson(
+      person,
+      2025,
+      -Infinity,
+      extraGenerations,
+    );
     buildAncestorGroups();
     addProfileMessage.innerText = treeBuildingResult(person);
   } catch (error) {
     console.log('Fetching ancestors failed, message ', error);
-    addProfileMessage.innerText = 'Fetching ancestors failed, error '
-      + (error?.message ?? JSON.stringify(error));
+    addProfileMessage.innerText =
+      'Fetching ancestors failed, error ' +
+      (error?.message ?? JSON.stringify(error));
   } finally {
     finishTreeBuild();
   }
@@ -601,12 +653,15 @@ async function rebuildTree(person) {
     addProfileMessage.innerText = 'Rebuilding tree for ' + displayName(person);
     await treeBuilder.rebuild(person, Number(yearLimitElement.value));
     buildAncestorGroups();
-    addProfileMessage.innerText = (client.stopped ? 'Stopped' : 'Finished')
-      + ' rebuilding tree for ' + displayName(person);
+    addProfileMessage.innerText =
+      (client.stopped ? 'Stopped' : 'Finished') +
+      ' rebuilding tree for ' +
+      displayName(person);
   } catch (error) {
     console.log('Rebuilding tree failed, message ', error);
-    addProfileMessage.innerText = 'Rebuilding tree failed, error '
-      + (error?.message ?? JSON.stringify(error));
+    addProfileMessage.innerText =
+      'Rebuilding tree failed, error ' +
+      (error?.message ?? JSON.stringify(error));
   } finally {
     finishTreeBuild();
   }
@@ -624,7 +679,7 @@ function ancestorCount(person) {
   link.href = '#';
   link.title = `Fetch ${extraGenerations} generations of ancestors`;
   link.textContent = count;
-  link.addEventListener('click', event => {
+  link.addEventListener('click', (event) => {
     event.preventDefault();
     startUserOperation();
     fetchMoreAncestors(person);
@@ -646,15 +701,17 @@ function displayAlgorithmSelect() {
     algorithmSelectElement.append(option);
   }
   const stored = localStorage.getItem(algorithmKey);
-  algorithmSelectElement.value =
-    Object.hasOwn(groupingAlgorithms, stored) ? stored : 'sharedAncestors';
+  algorithmSelectElement.value = Object.hasOwn(groupingAlgorithms, stored)
+    ? stored
+    : 'sharedAncestors';
 }
 
 function buildAncestorGroups() {
   db.createAncestors();
   ancestorGroups = groupingAlgorithms[algorithmSelectElement.value](
-    profileList.filter(profile => !excludedProfileIds.has(profile.id())),
-    db);
+    profileList.filter((profile) => !excludedProfileIds.has(profile.id())),
+    db,
+  );
   console.log('Ancestor groups are', ancestorGroups);
   ungroupedProfileIds = display.ungroupedIds(ancestorGroups);
   displayProfileList();
@@ -664,17 +721,16 @@ function buildAncestorGroups() {
 function displayAncestorGroups() {
   const dl = document.createElement('dl');
 
-  display.groupListEntries(ancestorGroups, db).forEach(entry => {
+  display.groupListEntries(ancestorGroups, db).forEach((entry) => {
     const dt = document.createElement('dt');
-    entry.members.forEach(member => {
+    entry.members.forEach((member) => {
       dt.appendChild(document.createTextNode(displayName(member)));
       dt.appendChild(document.createElement('br'));
     });
     const dd = document.createElement('dd');
-    entry.ancestors.forEach(ancestor => {
+    entry.ancestors.forEach((ancestor) => {
       dd.appendChild(profileLink(ancestor));
-      dd.appendChild(document.createTextNode(
-        ' (' + ancestor.birth() + ') '));
+      dd.appendChild(document.createTextNode(' (' + ancestor.birth() + ') '));
       dd.appendChild(ancestorCount(ancestor));
       dd.appendChild(document.createElement('br'));
     });
@@ -701,16 +757,24 @@ function downloadJson(json, fileName) {
 }
 
 function exportToFile() {
-  const exported = exportToJsonString(db, groupStore, currentGroup,
-                                      currentProfileIds(),
-                                      currentExcludedIds());
+  const exported = exportToJsonString(
+    db,
+    groupStore,
+    currentGroup,
+    currentProfileIds(),
+    currentExcludedIds(),
+  );
   downloadJson(exported, display.databaseFileName(new Date()));
 }
 
 function saveGroupToFile() {
-  const exported = exportGroupToJsonString(currentGroup, currentProfileIds(),
-                                           db, currentExcludedIds(),
-                                           groupNotesElement.value);
+  const exported = exportGroupToJsonString(
+    currentGroup,
+    currentProfileIds(),
+    db,
+    currentExcludedIds(),
+    groupNotesElement.value,
+  );
   downloadJson(exported, display.groupFileName(currentGroup, new Date()));
 }
 
@@ -725,24 +789,36 @@ async function loadGroupFromFile(file) {
     return;
   }
   const groupName = imported.groupName;
-  if ((groupStore.has(groupName) || groupName === currentGroup)
-      && !confirm('Replace the members of group "' + groupName
-                  + '" with those in ' + file.name + '?')) {
+  if (
+    (groupStore.has(groupName) || groupName === currentGroup) &&
+    !confirm(
+      'Replace the members of group "' +
+        groupName +
+        '" with those in ' +
+        file.name +
+        '?',
+    )
+  ) {
     return;
   }
   const result = mergeGroupImport(imported, db);
   await saveDatabase(db);
-  groupStore.switchTo(currentGroup, currentProfileIds(), groupName,
-                     currentExcludedIds());
+  groupStore.switchTo(
+    currentGroup,
+    currentProfileIds(),
+    groupName,
+    currentExcludedIds(),
+  );
   groupStore.save(groupName, result.ids);
   groupStore.saveNotes(groupName, imported.notes ?? '');
   groupStore.saveExcluded(groupName, result.excluded);
   selectGroup(groupName);
   buildAncestorGroups();
-  groupFileMessage.innerText = `Loaded ${imported.persons.length} profiles `
-    + `(${result.ids.length} members and their ancestors): `
-    + `${result.added} new, ${result.replaced} updated from the file, `
-    + `${result.kept} kept as in the database`;
+  groupFileMessage.innerText =
+    `Loaded ${imported.persons.length} profiles ` +
+    `(${result.ids.length} members and their ancestors): ` +
+    `${result.added} new, ${result.replaced} updated from the file, ` +
+    `${result.kept} kept as in the database`;
 }
 
 async function importFromFile(file) {
@@ -753,8 +829,14 @@ async function importFromFile(file) {
     showErrorMessage('Could not load ' + file.name + ': ' + error.message);
     return;
   }
-  if (!confirm('Replace the current database and all groups with the '
-               + 'contents of ' + file.name + '?')) {
+  if (
+    !confirm(
+      'Replace the current database and all groups with the ' +
+        'contents of ' +
+        file.name +
+        '?',
+    )
+  ) {
     return;
   }
   const importedGroup = applyImport(imported, db, groupStore);
@@ -785,7 +867,7 @@ newGroupCreateButton.addEventListener('click', () => {
   createNewGroup();
 });
 
-newGroupNameElement.addEventListener('keydown', event => {
+newGroupNameElement.addEventListener('keydown', (event) => {
   if (event.key === 'Enter') {
     startUserOperation();
     createNewGroup();

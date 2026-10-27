@@ -9,8 +9,9 @@ import { idToUrl, urlToId, profileFields } from './geni_structures.js';
 
 // The fields of a profile record asked for with fields=.
 function onlyProfileFields(record = {}) {
-  return Object.fromEntries(Object.entries(record)
-    .filter(([field]) => profileFields.includes(field)));
+  return Object.fromEntries(
+    Object.entries(record).filter(([field]) => profileFields.includes(field)),
+  );
 }
 
 class FakeGeniClient {
@@ -27,8 +28,14 @@ class FakeGeniClient {
 
   // Add the profile number n. attributes are added to the record.
   person(n, name, gender, birthYear, attributes = {}) {
-    const record = { id: `profile-${n}`, guid: `g${n}`, name, gender,
-                     unions: [], ...attributes };
+    const record = {
+      id: `profile-${n}`,
+      guid: `g${n}`,
+      name,
+      gender,
+      unions: [],
+      ...attributes,
+    };
     if (birthYear !== undefined) {
       record.birth = { date: { year: birthYear } };
     }
@@ -42,8 +49,8 @@ class FakeGeniClient {
     const id = `union-${n}`;
     this.#unions.set(id, {
       id,
-      partners: partners.map(p => idToUrl(`profile-${p}`)),
-      children: children.map(c => idToUrl(`profile-${c}`))
+      partners: partners.map((p) => idToUrl(`profile-${p}`)),
+      children: children.map((c) => idToUrl(`profile-${c}`)),
     });
     for (const p of [...partners, ...children]) {
       this.#profiles.get(`profile-${p}`).unions.push(idToUrl(id));
@@ -66,23 +73,30 @@ class FakeGeniClient {
   merge(n, m) {
     const [oldUrl, newUrl] = [idToUrl(`profile-${n}`), idToUrl(`profile-${m}`)];
     for (const union of this.#unions.values()) {
-      union.partners = union.partners.map(p => p === oldUrl ? newUrl : p);
-      union.children = union.children.map(c => c === oldUrl ? newUrl : c);
+      union.partners = union.partners.map((p) => (p === oldUrl ? newUrl : p));
+      union.children = union.children.map((c) => (c === oldUrl ? newUrl : c));
     }
     const target = this.#profiles.get(`profile-${m}`);
-    target.unions = [...new Set([...target.unions,
-                                 ...this.#profiles.get(`profile-${n}`).unions])];
+    target.unions = [
+      ...new Set([
+        ...target.unions,
+        ...this.#profiles.get(`profile-${n}`).unions,
+      ]),
+    ];
     this.#profiles.set(`profile-${n}`, {
-      id: `profile-${n}`, merged_into: idToUrl(`profile-${m}`)
+      id: `profile-${n}`,
+      merged_into: idToUrl(`profile-${m}`),
     });
   }
 
   // How many times the profile with the guid was fetched, by guid or URL.
   profileFetches(guid) {
     const id = `profile-${guid.slice(1)}`;
-    return this.requests.filter(([operation, arg]) =>
-      (operation === 'getPerson' && arg === guid)
-      || (operation === 'getPersonByUrl' && urlToId(arg) === id)).length;
+    return this.requests.filter(
+      ([operation, arg]) =>
+        (operation === 'getPerson' && arg === guid) ||
+        (operation === 'getPersonByUrl' && urlToId(arg) === id),
+    ).length;
   }
 
   #answer(operation, arg, answer) {
@@ -90,28 +104,31 @@ class FakeGeniClient {
     if (this.#stopped) {
       return Promise.reject(new Error('Fetching stopped'));
     }
-    return Promise.resolve(answer()).then(value => structuredClone(value));
+    return Promise.resolve(answer()).then((value) => structuredClone(value));
   }
 
   // Unknown profiles are answered with an empty object.
   getPerson(guid) {
     return this.#answer('getPerson', guid, () =>
-      onlyProfileFields(this.#profiles.get(`profile-${guid.slice(1)}`)));
+      onlyProfileFields(this.#profiles.get(`profile-${guid.slice(1)}`)),
+    );
   }
 
   getPersonByUrl(url) {
     return this.#answer('getPersonByUrl', url, () =>
-      onlyProfileFields(this.#profiles.get(urlToId(url))));
+      onlyProfileFields(this.#profiles.get(urlToId(url))),
+    );
   }
 
   // Like Geni, a single union is answered without a results list.
   getUnions(ids) {
     return this.#answer('getUnions', ids, () => {
-      if (ids.some(id => this.failingUnions.has(`union-${id}`))) {
+      if (ids.some((id) => this.failingUnions.has(`union-${id}`))) {
         throw new Error('Union fetch failed');
       }
-      const results = ids.map(id => this.#unions.get(`union-${id}`))
-            .filter(Boolean);
+      const results = ids
+        .map((id) => this.#unions.get(`union-${id}`))
+        .filter(Boolean);
       return results.length === 1 ? results[0] : { results };
     });
   }

@@ -10,7 +10,7 @@ async function loadDatabase(db) {
   let fileHandle;
   try {
     fileHandle = await fsHandle.getFileHandle(databaseName);
-  } catch(err) {
+  } catch (err) {
     if (err.name === 'NotFoundError') {
       console.log('File not found, assuming empty');
       return;
@@ -36,18 +36,27 @@ async function loadDatabase(db) {
 async function saveDatabase(db) {
   const startTime = performance.now();
   const estimateBefore = await navigator.storage.estimate();
-  console.log('Estimated storage is ', estimateBefore.quota,
-              estimateBefore.usage);
+  console.log(
+    'Estimated storage is ',
+    estimateBefore.quota,
+    estimateBefore.usage,
+  );
   const fsHandle = await navigator.storage.getDirectory();
   const fileHandle = await fsHandle.getFileHandle(databaseName, {
-    create: true
+    create: true,
   });
   const writable = await fileHandle.createWritable();
   await writable.write(db.toJsonString());
   await writable.close();
   const estimateAfter = await navigator.storage.estimate();
-  console.log('Estimated storage after is ', estimateAfter.quota,
-              estimateAfter.usage);
-  console.log('Database saved in',
-              Math.round(performance.now() - startTime), 'ms');
+  console.log(
+    'Estimated storage after is ',
+    estimateAfter.quota,
+    estimateAfter.usage,
+  );
+  console.log(
+    'Database saved in',
+    Math.round(performance.now() - startTime),
+    'ms',
+  );
 }

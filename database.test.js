@@ -16,7 +16,7 @@ test('Putting a person in and getting it back out works', () => {
 test('sizeView is called with the new size when entries are added', () => {
   let db = new Database();
   const sizes = [];
-  db.sizeView = size => sizes.push(size);
+  db.sizeView = (size) => sizes.push(size);
   db.addWithAttributes('id1', { id: 'id1', name: 'one' });
   db.addWithAttributes('id2', { id: 'id2', name: 'two' });
   expect(sizes).toStrictEqual([1, 2]);
@@ -66,8 +66,11 @@ test('ancestorIds follows parent links that are in the database', () => {
   db.addWithAttributes('gf', { name: 'Grandfather' });
   db.addWithAttributes('f', { name: 'Father', father: 'gf' });
   // The mother's record is missing, so she is not counted.
-  const child = db.addWithAttributes('c', { name: 'Child', father: 'f',
-                                            mother: 'missing' });
+  const child = db.addWithAttributes('c', {
+    name: 'Child',
+    father: 'f',
+    mother: 'missing',
+  });
   db.createAncestors();
   expect([...db.ancestorIds('c')].sort()).toStrictEqual(['f', 'gf']);
   expect(db.ancestorIds('c')).toStrictEqual(child.ancestors());
@@ -100,15 +103,25 @@ test('ancestorGenerations counts generations by the shortest path', () => {
   db.addWithAttributes('gf', { name: 'Grandfather', father: 'a' });
   db.addWithAttributes('f', { name: 'Father', father: 'gf' });
   db.addWithAttributes('m', { name: 'Mother', father: 'a' });
-  const child = db.addWithAttributes('c', { name: 'Child', father: 'f',
-                                            mother: 'm' });
+  const child = db.addWithAttributes('c', {
+    name: 'Child',
+    father: 'f',
+    mother: 'm',
+  });
   expect(child.ancestorGenerations().size).toBe(0);
   db.createAncestors();
   // 'a' is 3 generations back through the father, 2 through the mother.
   expect(child.ancestorGenerations()).toStrictEqual(
-    new Map([['f', 1], ['gf', 2], ['a', 2], ['m', 1]]));
-  expect(new Set(child.ancestorGenerations().keys()))
-    .toStrictEqual(child.ancestors());
+    new Map([
+      ['f', 1],
+      ['gf', 2],
+      ['a', 2],
+      ['m', 1],
+    ]),
+  );
+  expect(new Set(child.ancestorGenerations().keys())).toStrictEqual(
+    child.ancestors(),
+  );
 });
 
 test('Completeness index counts parents and their indexes', () => {
@@ -116,7 +129,11 @@ test('Completeness index counts parents and their indexes', () => {
   db.addWithAttributes('gf', { name: 'Grandfather' });
   db.addWithAttributes('f', { name: 'Father', father: 'gf' });
   db.addWithAttributes('m', { name: 'Mother' });
-  const child = db.addWithAttributes('c', { name: 'Child', father: 'f', mother: 'm' });
+  const child = db.addWithAttributes('c', {
+    name: 'Child',
+    father: 'f',
+    mother: 'm',
+  });
   // Father: 0.25. Child: 0.25 + 0.25 + 0.25 * 0.25.
   db.createAncestors();
   expect(db.get('f').completenessIndex()).toBe(0.25);
@@ -136,13 +153,20 @@ test('Completeness index ignores links to persons not in the database', () => {
 test('updateAttributes replaces the record but keeps the object and links', () => {
   const db = new Database();
   const person = db.addWithAttributes('g1', {
-    id: 'profile-1', name: 'Old', gender: 'male', father: 'f',
-    birth: {date: {year: 1900}}});
+    id: 'profile-1',
+    name: 'Old',
+    gender: 'male',
+    father: 'f',
+    birth: { date: { year: 1900 } },
+  });
   db.addWithAttributes('f', { id: 'profile-2' });
   person.parents = ['url'];
   const updated = db.updateAttributes('g1', {
-    id: 'profile-1', name: 'New', gender: 'female',
-    birth: {date: {year: 1901}}});
+    id: 'profile-1',
+    name: 'New',
+    gender: 'female',
+    birth: { date: { year: 1901 } },
+  });
   expect(updated).toBe(person);
   expect(db.get('g1')).toBe(person);
   expect(db.getByIdAttribute('profile-1')).toBe(person);
@@ -164,13 +188,17 @@ test('merge moves links to the new person and keeps the old id working', () => {
   db.addWithAttributes('old', { id: 'profile-1', name: 'Old' });
   const current = db.addWithAttributes('new', { id: 'profile-2', name: 'New' });
   const child1 = db.addWithAttributes('c1', { id: 'profile-3', father: 'old' });
-  child1.parents = ['https://www.geni.com/api/profile-1',
-                    'https://www.geni.com/api/profile-9'];
+  child1.parents = [
+    'https://www.geni.com/api/profile-1',
+    'https://www.geni.com/api/profile-9',
+  ];
   const child2 = db.addWithAttributes('c2', { id: 'profile-4', father: 'new' });
   expect(db.merge('old', 'new')).toBe(1);
   expect(child1.father()).toBe('new');
-  expect(child1.parents).toStrictEqual(['https://www.geni.com/api/profile-2',
-                                        'https://www.geni.com/api/profile-9']);
+  expect(child1.parents).toStrictEqual([
+    'https://www.geni.com/api/profile-2',
+    'https://www.geni.com/api/profile-9',
+  ]);
   expect(db.size()).toBe(3);
   expect(db.get('old')).toBe(current);
   expect(db.getByIdAttribute('profile-1')).toBe(current);

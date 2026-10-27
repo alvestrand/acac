@@ -13,7 +13,6 @@ const profileParams = { fields: profileFields.join(',') };
 const rateLimitRetryDelay = 5000;
 
 class GeniOperation {
-
   constructor(operation, args, resolve, reject) {
     this.operation = operation;
     this.args = args;
@@ -32,13 +31,15 @@ class GeniOperation {
     try {
       // Geni modifies the args argument, so clone it.
       const args = structuredClone(this.args);
-      Geni.api(this.operation, args, data => {
+      Geni.api(this.operation, args, (data) => {
         if (this.cancelled) {
           return;
         }
         if (data.error) {
-          if (data.error.type == 'ApiException'
-              && data.error.message == 'Rate limit exceeded.') {
+          if (
+            data.error.type == 'ApiException' &&
+            data.error.message == 'Rate limit exceeded.'
+          ) {
             done('rateLimited');
             return;
           }
@@ -49,8 +50,7 @@ class GeniOperation {
         }
         done('answered');
       });
-    }
-    catch (error) {
+    } catch (error) {
       console.log('Operation threw an error');
       this.reject(error);
       done('failed');
@@ -100,7 +100,7 @@ class GeniClient {
   // Run an operation. When it is finished, start the next one at once.
   // When rate limited, run it again after a delay.
   #execute(op) {
-    op.execute(outcome => {
+    op.execute((outcome) => {
       if (outcome === 'rateLimited') {
         this.#rateLimited = true;
         this.#retryTimer = setTimeout(() => {
@@ -155,7 +155,7 @@ class GeniClient {
       if (this.connected) {
         resolve();
       } else {
-        Geni.connect(response => {
+        Geni.connect((response) => {
           if (response.status == 'authorized') {
             console.log('Geni connected');
             this.connected = true;
@@ -170,8 +170,12 @@ class GeniClient {
 
   async getPerson(guid) {
     return new Promise((resolve, reject) => {
-      const op = new GeniOperation('/profile' + '-g' + guid, profileParams,
-                                   resolve, reject);
+      const op = new GeniOperation(
+        '/profile' + '-g' + guid,
+        profileParams,
+        resolve,
+        reject,
+      );
       this.#enqueue(op);
     });
   }
@@ -193,8 +197,7 @@ class GeniClient {
 
   async getUnions(unions) {
     return new Promise((resolve, reject) => {
-      const op = new GeniOperation('/union', {ids: unions},
-                                   resolve, reject);
+      const op = new GeniOperation('/union', { ids: unions }, resolve, reject);
       this.#enqueue(op);
     });
   }

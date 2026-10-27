@@ -4,23 +4,27 @@ import { FakeStorage } from './fake_storage.js';
 function makeStore() {
   const storage = new FakeStorage();
   // Stored the way older versions did it, with whole person records.
-  storage.setItem('profileSet-old',
-                  JSON.stringify([{ id: 'g1', attributes: { name: 'One' } }]));
+  storage.setItem(
+    'profileSet-old',
+    JSON.stringify([{ id: 'g1', attributes: { name: 'One' } }]),
+  );
   storage.setItem('profileSet-new', JSON.stringify(['g2', 'g3']));
   storage.setItem('unrelated', 'keep me');
   return { storage, groupStore: new GroupStore(storage) };
 }
 
 test('profileIds accepts both ids and person records', () => {
-  expect(profileIds(['a', { id: 'b', attributes: {} }]))
-    .toStrictEqual(['a', 'b']);
+  expect(profileIds(['a', { id: 'b', attributes: {} }])).toStrictEqual([
+    'a',
+    'b',
+  ]);
 });
 
 test('groups returns only profile sets, as ids', () => {
   const { groupStore } = makeStore();
   expect(groupStore.groups()).toStrictEqual({
     old: ['g1'],
-    new: ['g2', 'g3']
+    new: ['g2', 'g3'],
   });
 });
 
@@ -48,7 +52,7 @@ test('notes are stored with the group and survive member updates', () => {
   expect(groupStore.notes('new')).toBe('Check this branch');
   expect(JSON.parse(storage.getItem('profileSet-new'))).toStrictEqual({
     members: ['g2', 'g4'],
-    notes: 'Check this branch'
+    notes: 'Check this branch',
   });
 });
 
@@ -139,8 +143,7 @@ test('excluded members are saved per group, and empty by default', () => {
   expect(groupStore.excluded('new')).toStrictEqual(['g3']);
   expect(groupStore.excluded('old')).toStrictEqual([]);
   // Not taken for a group of its own.
-  expect(Object.keys(groupStore.groups()).sort())
-    .toStrictEqual(['new', 'old']);
+  expect(Object.keys(groupStore.groups()).sort()).toStrictEqual(['new', 'old']);
   groupStore.saveExcluded('new', []);
   expect(storage.getItem('excludedSet-new')).toBeNull();
 });

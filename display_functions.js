@@ -10,9 +10,12 @@ import { removeInnerParents } from './ancestor_finder.js';
 // The initials of a name, such as 'K. N. N.' for 'Kari Nilsdtr Nærum
 // (Lode)'. Parts in parentheses (birth names) are left out.
 function initials(name) {
-  return (name ?? '').replace(/\([^)]*\)/g, ' ')
-    .split(/\s+/).filter(Boolean)
-    .map(word => [...word][0].toUpperCase() + '.').join(' ');
+  return (name ?? '')
+    .replace(/\([^)]*\)/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => [...word][0].toUpperCase() + '.')
+    .join(' ');
 }
 
 // The name of person as shown on the page. With initialsOnly, the
@@ -38,8 +41,7 @@ function formatCompleteness(index) {
 // Each gives a sort key: names A to Z, most complete generations first.
 const profileSortKeys = {
   name: (profile, db, memo) => profile.name() ?? '',
-  generations: (profile, db, memo) =>
-    -db.completenessIndex(profile.id(), memo)
+  generations: (profile, db, memo) => -db.completenessIndex(profile.id(), memo),
 };
 
 // The profiles sorted on column (a key of profileSortKeys), reversed if
@@ -51,14 +53,15 @@ function sortProfiles(profiles, column, reversed, db) {
   }
   const memo = new Map();
   const key = profileSortKeys[column];
-  const keys = new Map(profiles.map(
-    profile => [profile, key(profile, db, memo)]));
+  const keys = new Map(
+    profiles.map((profile) => [profile, key(profile, db, memo)]),
+  );
   const direction = reversed ? -1 : 1;
   return profiles.toSorted((a, b) => {
     const keyA = keys.get(a);
     const keyB = keys.get(b);
-    const order = typeof keyA === 'string'
-      ? keyA.localeCompare(keyB) : keyA - keyB;
+    const order =
+      typeof keyA === 'string' ? keyA.localeCompare(keyB) : keyA - keyB;
     return direction * order;
   });
 }
@@ -104,11 +107,15 @@ function ancestorCountDrop(previous, current, profileId, db) {
   if (previous === undefined || current.size >= previous.size) {
     return undefined;
   }
-  const suspects = [profileId, ...current].map(id => db.get(id))
-    .filter(person => person?.parents !== undefined
-      && [person.father(), person.mother()].filter(Boolean).length
-         < person.parents.length)
-    .map(person => person.id());
+  const suspects = [profileId, ...current]
+    .map((id) => db.get(id))
+    .filter(
+      (person) =>
+        person?.parents !== undefined &&
+        [person.father(), person.mother()].filter(Boolean).length <
+          person.parents.length,
+    )
+    .map((person) => person.id());
   return { lost: [...previous.difference(current)], suspects };
 }
 
@@ -116,8 +123,11 @@ function ancestorCountDrop(previous, current, profileId, db) {
 
 // The ids of the profiles alone in their group.
 function ungroupedIds(groups) {
-  return new Set(groups.filter(group => group.persons.length === 1)
-                 .map(group => group.persons[0].id()));
+  return new Set(
+    groups
+      .filter((group) => group.persons.length === 1)
+      .map((group) => group.persons[0].id()),
+  );
 }
 
 // What the group list shows: for each group of more than one profile,
@@ -125,10 +135,12 @@ function ungroupedIds(groups) {
 // those that are parents of others listed. People who share no ancestors with anyone
 // are left out.
 function groupListEntries(groups, db) {
-  return groups.filter(group => group.persons.length > 1).map(group => ({
-    members: group.persons,
-    ancestors: removeInnerParents(db, group.ancestors)
-  }));
+  return groups
+    .filter((group) => group.persons.length > 1)
+    .map((group) => ({
+      members: group.persons,
+      ancestors: removeInnerParents(db, group.ancestors),
+    }));
 }
 
 // Menu text for each of groupingAlgorithms.
@@ -136,7 +148,7 @@ const algorithmLabels = {
   sharedAncestors: 'Most shared ancestors',
   kinship: 'Kinship (closer ancestors count more)',
   closestAncestor: 'Closest common ancestor',
-  rootDescendants: 'Root ancestor with most descendants'
+  rootDescendants: 'Root ancestor with most descendants',
 };
 // The ones that merge the most complete trees first have the label of
 // the same scoring with this added.
@@ -172,8 +184,13 @@ function databaseFileName(date) {
 
 // The name of the file for saving the group named groupName.
 function groupFileName(groupName, date) {
-  return 'acac-group-' + (groupName === '' ? 'unnamed' : groupName)
-    + '-' + dateStamp(date) + '.json';
+  return (
+    'acac-group-' +
+    (groupName === '' ? 'unnamed' : groupName) +
+    '-' +
+    dateStamp(date) +
+    '.json'
+  );
 }
 
 export {
@@ -191,5 +208,5 @@ export {
   treeBuildingResult,
   dateStamp,
   databaseFileName,
-  groupFileName
-}
+  groupFileName,
+};

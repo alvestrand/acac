@@ -44,8 +44,11 @@ class Person {
       if ('mother' in attributes) {
         this.#mother = attributes.mother;
       }
-      if ('birth' in attributes && 'date' in attributes.birth
-         && 'year' in attributes.birth.date) {
+      if (
+        'birth' in attributes &&
+        'date' in attributes.birth &&
+        'year' in attributes.birth.date
+      ) {
         this.#birthYear = attributes.birth.date.year;
       }
       if ('gender' in attributes) {
@@ -71,7 +74,7 @@ class Person {
       id: this.#id,
       parents: this.parents,
       attributes: this.#personRecord,
-      markers: this.markers
+      markers: this.markers,
     };
   }
 
@@ -184,7 +187,7 @@ class Database {
     this.#idAttributeToGuidMap = new Map();
     this.#mergedInto = new Map();
     // Called with the new size whenever the number of entries changes.
-    this.sizeView = number => {};
+    this.sizeView = (number) => {};
   }
   size() {
     return this.#persons.size;
@@ -197,8 +200,7 @@ class Database {
   }
   addPerson(person) {
     this.#persons.set(person.id(), person);
-    this.#idAttributeToGuidMap.set(person.attribute('id'),
-                                   person.id());
+    this.#idAttributeToGuidMap.set(person.attribute('id'), person.id());
     this.sizeView(this.#persons.size);
     return person;
   }
@@ -252,7 +254,7 @@ class Database {
     }
     const newUrl = idToUrl(newPerson.attribute('id'));
     let changed = 0;
-    this.#persons.forEach(person => {
+    this.#persons.forEach((person) => {
       let changedThis = false;
       if (person.father() === oldId) {
         person.setFather(newId);
@@ -262,9 +264,10 @@ class Database {
         person.setMother(newId);
         changedThis = true;
       }
-      if (person.parents?.some(url => urlToId(url) === oldIdAttribute)) {
-        person.parents = person.parents.map(
-          url => urlToId(url) === oldIdAttribute ? newUrl : url);
+      if (person.parents?.some((url) => urlToId(url) === oldIdAttribute)) {
+        person.parents = person.parents.map((url) =>
+          urlToId(url) === oldIdAttribute ? newUrl : url,
+        );
         changedThis = true;
       }
       if (changedThis) {
@@ -283,8 +286,10 @@ class Database {
   }
   // Represent the database as an object suitable for JSON.stringify.
   toJsonObject() {
-    return {persons: Object.fromEntries(this.#persons),
-            merged: Object.fromEntries(this.#mergedInto)};
+    return {
+      persons: Object.fromEntries(this.#persons),
+      merged: Object.fromEntries(this.#mergedInto),
+    };
   }
   // Represent the database as a JSON string representation.
   toJsonString() {
@@ -311,7 +316,10 @@ class Database {
   getAllWithBirthYearAndGender(year, gender) {
     let result = [];
     this.#persons.forEach((value, key, map) => {
-      if (value.birth() === year && (gender === 'all' || value.gender() == gender)) {
+      if (
+        value.birth() === year &&
+        (gender === 'all' || value.gender() == gender)
+      ) {
         result.push(value);
       }
     });
@@ -357,16 +365,13 @@ class Database {
   // Sets built earlier are rebuilt, since links may have been added since.
   createAncestors() {
     console.log('Creating ancestors for all entries');
-    this.#persons.forEach(person => {
+    this.#persons.forEach((person) => {
       person.clearAncestors();
     });
-    this.#persons.forEach(person => {
+    this.#persons.forEach((person) => {
       person.addAncestors(this);
     });
   }
 }
 
-export {
-  Person,
-  Database
-}
+export { Person, Database };

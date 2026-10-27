@@ -13,7 +13,7 @@ const currentGroupKey = 'currentSet';
 // Convert a group's member list to a list of ids.
 // Accepts both ids and person records as stored by older versions.
 function profileIds(entries) {
-  return entries.map(entry => typeof entry === 'string' ? entry : entry.id);
+  return entries.map((entry) => (typeof entry === 'string' ? entry : entry.id));
 }
 
 class GroupStore {
@@ -29,8 +29,9 @@ class GroupStore {
     for (let i = 0; i < this.#storage.length; i++) {
       const key = this.#storage.key(i);
       if (key.startsWith(profileSetPrefix)) {
-        groups[key.substring(profileSetPrefix.length)] =
-          profileIds(this.#group(key.substring(profileSetPrefix.length)).members);
+        groups[key.substring(profileSetPrefix.length)] = profileIds(
+          this.#group(key.substring(profileSetPrefix.length)).members,
+        );
       }
     }
     return groups;
@@ -135,7 +136,4 @@ class GroupStore {
   }
 }
 
-export {
-  profileIds,
-  GroupStore
-}
+export { profileIds, GroupStore };

@@ -38,7 +38,7 @@ function makeBuilder(geni, db = new Database()) {
   const hooks = {
     onSurprise: jest.fn(),
     onMerge: jest.fn(),
-    onMessage: jest.fn()
+    onMessage: jest.fn(),
   };
   return { db, hooks, builder: new TreeBuilder(geni, db, hooks) };
 }
@@ -59,8 +59,9 @@ test('buildTreeForPerson links parents by gender back to the year limit', async 
   expect(db.get('g4').father()).toBe('g6');
   // 6 and 7 are born before the limit, so their parents are not looked for.
   expect(db.get('g6').parents).toBeUndefined();
-  expect(db.ancestorIds('g1'))
-    .toStrictEqual(new Set(['g2', 'g3', 'g4', 'g5', 'g6', 'g7']));
+  expect(db.ancestorIds('g1')).toStrictEqual(
+    new Set(['g2', 'g3', 'g4', 'g5', 'g6', 'g7']),
+  );
   expect(hooks.onSurprise).not.toHaveBeenCalled();
 });
 
@@ -108,8 +109,10 @@ test('a profile with neither name nor merged_into is a surprise', async () => {
   geni.edit(2, 'guid', undefined);
   await builder.rebuild(db.get('g1'), yearLimit);
   expect(hooks.onSurprise).toHaveBeenCalledWith(
-    'a profile has neither name nor merged_into', 'profile-2',
-    expect.objectContaining({ id: 'profile-2', gender: 'male' }));
+    'a profile has neither name nor merged_into',
+    'profile-2',
+    expect.objectContaining({ id: 'profile-2', gender: 'male' }),
+  );
   expect(geni.stopped).toBe(true);
   // The stored record is kept.
   expect(db.get('g2').name()).toBe('Father');
@@ -122,8 +125,7 @@ test('rebuild uses a gender corrected on Geni', async () => {
   await addAndBuild(builder, 'g1');
   // The stored record of the mother has the wrong gender.
   const mother = db.get('g3');
-  db.updateAttributes('g3', { ...mother.toJSON().attributes,
-                              gender: 'male' });
+  db.updateAttributes('g3', { ...mother.toJSON().attributes, gender: 'male' });
   await builder.rebuild(db.get('g1'), yearLimit);
   expect(hooks.onSurprise).not.toHaveBeenCalled();
   expect(db.get('g3').gender()).toBe('female');
@@ -151,8 +153,10 @@ test('rebuilds running at once fetch shared ancestors once', async () => {
   await addAndBuild(builder, 'g1');
   await addAndBuild(builder, 'g8');
   geni.requests = [];
-  await Promise.all([builder.rebuild(db.get('g1'), yearLimit),
-                     builder.rebuild(db.get('g8'), yearLimit)]);
+  await Promise.all([
+    builder.rebuild(db.get('g1'), yearLimit),
+    builder.rebuild(db.get('g8'), yearLimit),
+  ]);
   for (const guid of ['g1', 'g2', 'g4', 'g5', 'g8', 'g9']) {
     expect(geni.profileFetches(guid)).toBe(1);
   }
@@ -207,7 +211,10 @@ test('rebuild reports two fathers and stops fetching', async () => {
   geni.edit(3, 'gender', 'male');
   await builder.rebuild(db.get('g1'), yearLimit);
   expect(hooks.onSurprise).toHaveBeenCalledWith(
-    'two fathers', 'Child (g1)', expect.any(Array));
+    'two fathers',
+    'Child (g1)',
+    expect.any(Array),
+  );
   expect(geni.stopped).toBe(true);
 });
 
@@ -216,7 +223,8 @@ test('surprise details use the name hook', async () => {
   const db = new Database();
   const onSurprise = jest.fn();
   const builder = new TreeBuilder(geni, db, {
-    onSurprise, name: person => person.name()[0] + '.'
+    onSurprise,
+    name: (person) => person.name()[0] + '.',
   });
   await addAndBuild(builder, 'g1');
   geni.edit(3, 'gender', 'male');
