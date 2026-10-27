@@ -14,12 +14,26 @@ import {
 import { groupingAlgorithms } from './ancestor_finder.js';
 import * as display from './display_functions.js';
 import { TreeBuilder } from './tree_builder.js';
+import { pathLength } from './path_to.js';
 
 let db = new Database();
+let lastDatabaseSize = 0;
+let profileAdditionCount = 0;
+let savedProfileAdditionCount = 0;
 const cacheSizeElement = document.getElementById('cache-size');
 db.sizeView = (number) => {
   cacheSizeElement.innerText = number;
+  if (number > lastDatabaseSize) {
+    profileAdditionCount += number - lastDatabaseSize;
+  }
+  lastDatabaseSize = number;
 };
+
+async function saveDatabaseSnapshot() {
+  const additionsAtStart = profileAdditionCount;
+  await saveDatabase(db);
+  savedProfileAdditionCount = additionsAtStart;
+}
 
 const errorMessageElement = document.getElementById('error-message');
 
@@ -71,13 +85,33 @@ if (errorMessageElement.hidden) {
 }
 
 const client = new GeniClient(geniAppId);
+let currentQueueSize = 0;
 client.queueSizeView = (number, waiting) => {
+  const wasBusy = currentQueueSize > 0;
+  currentQueueSize = number;
   scheduleRunningCounts();
   if (number === 0) {
     queueSizeElement.innerText = 'Queue empty';
   } else {
     queueSizeElement.innerText =
       'Queue size: ' + number + (waiting ? ' waiting' : '');
+  }
+  if (wasBusy && number === 0) {
+    // Let the request's promise handlers store any returned profiles first.
+    setTimeout(() => {
+      if (
+        currentQueueSize === 0 &&
+        profileAdditionCount > savedProfileAdditionCount
+      ) {
+        saveDatabaseSnapshot().catch((error) => {
+          console.log('Automatic database save failed', error);
+          showErrorMessage(
+            'Automatic database save failed: ' +
+              (error?.message ?? String(error)),
+          );
+        });
+      }
+    }, 0);
   }
 };
 
@@ -125,6 +159,8 @@ const importFileInput = document.getElementById('import-file-input');
 const buildTreeButton = document.getElementById('build-tree');
 const stopFetchingButton = document.getElementById('stop-fetching');
 const yearLimitElement = document.getElementById('year-limit');
+const pathAgeLimitElement = document.getElementById('path-age-limit');
+const pathLengthLimitElement = document.getElementById('path-length-limit');
 const recalculateGroupsButton = document.getElementById('recalculate-groups');
 const groupListElement = document.getElementById('group-list');
 const algorithmSelectElement = document.getElementById('algorithm-select');
@@ -179,7 +215,7 @@ function currentExcludedIds() {
 
 // Save the database and the current group, same as the "Save database" button.
 async function saveCurrentState() {
-  await saveDatabase(db);
+  await saveDatabaseSnapshot();
   groupStore.save(currentGroup, currentProfileIds());
   groupStore.saveNotes(currentGroup, groupNotesElement.value);
   groupStore.saveExcluded(currentGroup, currentExcludedIds());
@@ -189,7 +225,7 @@ async function saveCurrentState() {
 // Save the database and the current group, then switch to another group
 // and recalculate its ancestor groups.
 async function switchToGroup(name) {
-  await saveDatabase(db);
+  await saveDatabaseSnapshot();
   groupStore.switchTo(
     currentGroup,
     currentProfileIds(),
@@ -269,12 +305,15 @@ function profileMenu(profile) {
   const rebuild = document.createElement('option');
   rebuild.value = 'rebuild';
   rebuild.textContent = 'Rebuild tree';
+  const findPaths = document.createElement('option');
+  findPaths.value = 'find-paths';
+  findPaths.textContent = 'Find paths to other profiles';
   const exclude = document.createElement('option');
   exclude.value = 'exclude';
   exclude.textContent = excludedProfileIds.has(profile.id())
     ? 'Include in matching'
     : 'Exclude from matching';
-  select.append(title, remove, rebuild, exclude);
+  select.append(title, remove, rebuild, findPaths, exclude);
   select.addEventListener('change', () => {
     if (select.value !== '') {
       startUserOperation();
@@ -283,6 +322,8 @@ function profileMenu(profile) {
       removeFromProfileList(profile);
     } else if (select.value === 'rebuild') {
       rebuildTree(profile);
+    } else if (select.value === 'find-paths') {
+      findPathsToGroup(profile);
     } else if (select.value === 'exclude') {
       toggleExcluded(profile);
     }
@@ -667,6 +708,107 @@ async function rebuildTree(person) {
   }
 }
 
+// Find the blood path from person to every other group member, adding
+// profiles from each completed path to the cached tree within the limits.
+async function findPathsToGroup(person) {
+  startTreeBuild();
+  try {
+    if (!client.connected) {
+      await connectToGeni();
+    }
+    const pathLengthLimit = Number(pathLengthLimitElement.value);
+    const pathAgeLimit = Number(pathAgeLimitElement.value);
+    const others = profileList.filter((other) => other.id() !== person.id());
+    let newProfilesAdded = 0;
+    let pathsDiscarded = 0;
+    const discardedProfileIds = new Set();
+    const pathStatusCounts = {
+      done: 0,
+      pending: 0,
+      overloaded: 0,
+      'not found': 0,
+      other: 0,
+    };
+    for (const other of others) {
+      if (client.stopped) {
+        break;
+      }
+      addProfileMessage.innerText =
+        'Finding path from ' +
+        displayName(person) +
+        ' to ' +
+        displayName(other);
+      const result = await client.getPathTo(
+        person.attribute('id'),
+        other.attribute('id'),
+        'blood',
+      );
+      const status = Object.hasOwn(pathStatusCounts, result.status)
+        ? result.status
+        : 'other';
+      pathStatusCounts[status]++;
+      if (result.status === 'done' && Array.isArray(result.relations)) {
+        if (pathLength(result) > pathLengthLimit) {
+          pathsDiscarded++;
+          continue;
+        }
+        const pathResult = await treeBuilder.addPathProfiles(
+          result.relations,
+          pathAgeLimit,
+        );
+        newProfilesAdded += pathResult.added;
+        pathResult.discarded.forEach((id) => discardedProfileIds.add(id));
+      } else {
+        console.log(
+          'Path search did not finish',
+          person.name(),
+          other.name(),
+          result,
+        );
+        addProfileMessage.innerText =
+          'Path to ' +
+          displayName(other) +
+          ': ' +
+          (result.status ?? 'unexpected response');
+      }
+    }
+    followMergesInProfileList();
+    buildAncestorGroups();
+    addProfileMessage.innerText =
+      (client.stopped ? 'Stopped' : 'Finished') +
+      ' finding paths from ' +
+      displayName(db.get(person.id()) ?? person) +
+      '. Path statuses: done ' +
+      pathStatusCounts.done +
+      ', pending ' +
+      pathStatusCounts.pending +
+      ', overloaded ' +
+      pathStatusCounts.overloaded +
+      ', not found ' +
+      pathStatusCounts['not found'] +
+      ', other ' +
+      pathStatusCounts.other +
+      '; added ' +
+      newProfilesAdded +
+      ' new profiles' +
+      '; discarded ' +
+      pathsDiscarded +
+      ' paths over ' +
+      pathLengthLimit +
+      ' steps and ' +
+      discardedProfileIds.size +
+      ' profiles born before ' +
+      pathAgeLimit;
+  } catch (error) {
+    console.log('Finding paths failed, message ', error);
+    addProfileMessage.innerText =
+      'Finding paths failed, error ' +
+      (error?.message ?? JSON.stringify(error));
+  } finally {
+    finishTreeBuild();
+  }
+}
+
 // The ancestor count of person in [], as a link that fetches more
 // ancestors if there are few.
 function ancestorCount(person) {
@@ -802,7 +944,7 @@ async function loadGroupFromFile(file) {
     return;
   }
   const result = mergeGroupImport(imported, db);
-  await saveDatabase(db);
+  await saveDatabaseSnapshot();
   groupStore.switchTo(
     currentGroup,
     currentProfileIds(),
@@ -840,7 +982,7 @@ async function importFromFile(file) {
     return;
   }
   const importedGroup = applyImport(imported, db, groupStore);
-  await saveDatabase(db);
+  await saveDatabaseSnapshot();
   selectGroup(importedGroup);
   buildAncestorGroups();
 }
@@ -968,6 +1110,9 @@ algorithmSelectElement.addEventListener('change', () => {
 
 // ===== Initialize the page from last saved state ====
 await loadDatabase(db);
+lastDatabaseSize = db.size();
+profileAdditionCount = 0;
+savedProfileAdditionCount = 0;
 console.log('Database size', db.size());
 displayAlgorithmSelect();
 initialsOnlyElement.checked = localStorage.getItem(initialsOnlyKey) === 'true';

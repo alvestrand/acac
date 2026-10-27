@@ -35,9 +35,20 @@
   <button id="export-file">Save to file</button>
   <button id="import-file">Load from file</button>
   <input type="file" id="import-file-input" accept=".json,application/json" hidden></input>
-  <button id="build-tree">Build tree</button> back to
-  <input type="number" id="year-limit" value="1750"></input>
-  <button id="recalculate-groups">Recalculate groups</button>
+  <button id="build-tree">Build tree</button>
+  <button id="recalculate-groups">Recalculate groups</button><br/>
+  <label>
+    Limit for tree building
+    <input type="number" id="year-limit" value="1800"></input>
+  </label><br/>
+  <label>
+    Age limit for path search
+    <input type="number" id="path-age-limit" value="1600"></input>
+  </label><br/>
+  <label>
+    Length limit for path search
+    <input type="number" id="path-length-limit" value="25"></input>
+  </label>
   <br/>
   <span id="queue-size">Queue empty</span>
   <button id="stop-fetching">Stop fetching</button>
