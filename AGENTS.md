@@ -49,10 +49,13 @@ and that limitation reported.
 
 Recent commits use short, imperative summaries (for example,
 `Add bounded Geni path tracing`); add a brief body when context helps.
-Work on a new branch based on an up-to-date `main`. The maintainer
-handles pushing branches and opening and merging pull requests.
-Describe the change and test results in the handoff; include
-screenshots for visible UI changes when useful.
+Work on a new branch based on an up-to-date `main`. Commit only when
+asked, and split unrelated work into separate commits. The maintainer
+handles pushing branches and opening and merging pull requests. Before
+relying on uncertain Geni API behavior, check it with `testpage.html`;
+report what was verified and what remains uncertain. Describe the
+change and test results in the handoff; include screenshots for
+visible UI changes when useful.
 
 ## Security & Configuration
 
