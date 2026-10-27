@@ -75,10 +75,15 @@ test('getPathTo requests the selected path type between profile ids', async () =
   apiHandler = (operation, args, callback) => callback(answer);
   const client = new GeniClient('app');
   const result = await client.getPathTo(
-    'https://www.geni.com/api/profile-42', 'profile-99', 'inlaw');
+    'https://www.geni.com/api/profile-42',
+    'profile-99',
+    'inlaw',
+  );
   expect(Geni.api).toHaveBeenCalledWith(
-    '/profile-42/path-to/profile-99', {path_type: 'inlaw'},
-    expect.any(Function));
+    '/profile-42/path-to/profile-99',
+    { path_type: 'inlaw' },
+    expect.any(Function),
+  );
   expect(result).toEqual(answer);
 });
 
@@ -86,8 +91,10 @@ test('getPathTo defaults to blood paths', async () => {
   const client = new GeniClient('app');
   await client.getPathTo('profile-42', 'profile-99');
   expect(Geni.api).toHaveBeenCalledWith(
-    '/profile-42/path-to/profile-99', {path_type: 'blood'},
-    expect.any(Function));
+    '/profile-42/path-to/profile-99',
+    { path_type: 'blood' },
+    expect.any(Function),
+  );
 });
 
 test('getUnions passes the union ids as arguments', async () => {

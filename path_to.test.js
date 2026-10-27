@@ -1,8 +1,9 @@
 import { pathLength } from './path_to.js';
 
 test('pathLength uses Geni step_count', () => {
-  expect(pathLength({ step_count: 25,
-                      relations: Array(40).fill({}) })).toBe(25);
+  expect(pathLength({ step_count: 25, relations: Array(40).fill({}) })).toBe(
+    25,
+  );
 });
 
 test('pathLength falls back to relation entries minus both endpoints', () => {

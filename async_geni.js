@@ -192,8 +192,12 @@ class GeniClient {
     return new Promise((resolve, reject) => {
       const from = urlToId(fromProfileId);
       const to = urlToId(toProfileId);
-      const op = new GeniOperation('/' + from + '/path-to/' + to,
-                                   {path_type: pathType}, resolve, reject);
+      const op = new GeniOperation(
+        '/' + from + '/path-to/' + to,
+        { path_type: pathType },
+        resolve,
+        reject,
+      );
       this.#enqueue(op);
     });
   }

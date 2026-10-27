@@ -8,5 +8,6 @@ function pathLength(result) {
     return Number(result.step_count);
   }
   return Array.isArray(result.relations)
-    ? Math.max(0, result.relations.length - 1) : undefined;
+    ? Math.max(0, result.relations.length - 1)
+    : undefined;
 }

@@ -83,8 +83,7 @@ test('addPathProfiles stores path profiles by guid and links parents from unions
   const { db, builder } = makeBuilder(geni);
 
   const result = await builder.addPathProfiles([
-    { name: 'Path profile', relation: 'brother',
-      url: idToUrl('profile-20') }
+    { name: 'Path profile', relation: 'brother', url: idToUrl('profile-20') },
   ]);
 
   expect(result).toStrictEqual({ added: 3, discarded: [] });
@@ -92,7 +91,8 @@ test('addPathProfiles stores path profiles by guid and links parents from unions
   expect(db.get('g20').father()).toBe('g21');
   expect(db.get('g20').mother()).toBe('g22');
   expect(db.get('g20').parents).toStrictEqual([
-    idToUrl('profile-21'), idToUrl('profile-22')
+    idToUrl('profile-21'),
+    idToUrl('profile-22'),
   ]);
 });
 
@@ -104,9 +104,10 @@ test('addPathProfiles discards parents born before 1600', async () => {
   geni.union(30, [21, 22], [20]);
   const { db, builder } = makeBuilder(geni);
 
-  const result = await builder.addPathProfiles([
-    { url: idToUrl('profile-20') }
-  ], 1600);
+  const result = await builder.addPathProfiles(
+    [{ url: idToUrl('profile-20') }],
+    1600,
+  );
 
   expect(result).toStrictEqual({ added: 2, discarded: ['profile-21'] });
   expect(db.get('g20')).toBeDefined();
@@ -121,9 +122,10 @@ test('addPathProfiles discards a path profile born before the cutoff', async () 
   geni.person(20, 'Too old', 'female', 1599);
   const { db, builder } = makeBuilder(geni);
 
-  const result = await builder.addPathProfiles([
-    { url: idToUrl('profile-20') }
-  ], 1600);
+  const result = await builder.addPathProfiles(
+    [{ url: idToUrl('profile-20') }],
+    1600,
+  );
 
   expect(result).toStrictEqual({ added: 0, discarded: ['profile-20'] });
   expect(db.get('g20')).toBeUndefined();
