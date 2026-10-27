@@ -47,8 +47,8 @@ class TreeBuilder {
       onSurprise: () => {},
       onMerge: () => {},
       onMessage: () => {},
-      name: person => person.name(),
-      ...hooks
+      name: (person) => person.name(),
+      ...hooks,
     };
   }
 
@@ -71,28 +71,42 @@ class TreeBuilder {
     const first = profile;
     for (let i = 0; i < maxMergeSteps && 'merged_into' in profile; i++) {
       console.log('Following merged-to pointer', profile.merged_into);
-      if (typeof profile.merged_into !== 'string'
-          || !profile.merged_into.startsWith(idToUrl(''))) {
-        this.#surprise('merged_into is not a profile API URL',
-                       String(profile.merged_into), profile);
+      if (
+        typeof profile.merged_into !== 'string' ||
+        !profile.merged_into.startsWith(idToUrl(''))
+      ) {
+        this.#surprise(
+          'merged_into is not a profile API URL',
+          String(profile.merged_into),
+          profile,
+        );
         return profile;
       }
       profile = await this.#client.getPersonByUrl(profile.merged_into);
     }
     if ('merged_into' in profile) {
-      this.#surprise(`more than ${maxMergeSteps} merges in a row`,
-                     String(first.guid ?? first.id), first);
+      this.#surprise(
+        `more than ${maxMergeSteps} merges in a row`,
+        String(first.guid ?? first.id),
+        first,
+      );
     } else if (Object.keys(profile).length > 0 && !('name' in profile)) {
       // Profiles are fetched with fields=, and it is not known whether
       // Geni still answers merged_into then. A merged profile answered
       // without it would look like this. Treat it as not found, so that
       // it is not stored. (An empty answer means not found.)
-      this.#surprise('a profile has neither name nor merged_into',
-                     String(profile.guid ?? profile.id), profile);
+      this.#surprise(
+        'a profile has neither name nor merged_into',
+        String(profile.guid ?? profile.id),
+        profile,
+      );
       return {};
     } else if (profile !== first && !('guid' in profile)) {
-      this.#surprise('the profile merged into has no guid',
-                     String(first.merged_into), profile);
+      this.#surprise(
+        'the profile merged into has no guid',
+        String(first.merged_into),
+        profile,
+      );
     }
     return profile;
   }
@@ -100,11 +114,16 @@ class TreeBuilder {
   // Fetch a profile by guid, following merges.
   async #fetchProfile(guid) {
     const profile = await this.#client.getPerson(guid);
-    if ('guid' in profile && profile.guid !== guid
-        && !('merged_into' in profile)) {
+    if (
+      'guid' in profile &&
+      profile.guid !== guid &&
+      !('merged_into' in profile)
+    ) {
       // Treated as a merge, but Geni was expected to say merged_into.
-      this.#surprise('asked for one guid, got another without merged_into',
-                     `Asked for ${guid}, got ${profile.guid}`);
+      this.#surprise(
+        'asked for one guid, got another without merged_into',
+        `Asked for ${guid}, got ${profile.guid}`,
+      );
     }
     return this.#followMerges(profile);
   }
@@ -114,12 +133,19 @@ class TreeBuilder {
   // merged into it: record the merge, which moves the links to it.
   // Returns the person.
   #storeProfile(profile, oldId) {
-    const person = this.#db.get(profile.guid)
-          ?? this.#db.addWithAttributes(profile.guid, profile);
+    const person =
+      this.#db.get(profile.guid) ??
+      this.#db.addWithAttributes(profile.guid, profile);
     if (oldId !== undefined && oldId !== profile.guid) {
       const changed = this.#db.merge(oldId, profile.guid);
-      console.log(oldId, 'was merged into', person.name(),
-                  '- changed links of', changed, 'persons');
+      console.log(
+        oldId,
+        'was merged into',
+        person.name(),
+        '- changed links of',
+        changed,
+        'persons',
+      );
       this.#hooks.onMerge(oldId, profile.guid);
     }
     return person;
@@ -135,10 +161,10 @@ class TreeBuilder {
     if (stored && mergedTo === undefined) {
       return stored;
     }
-    const profile = mergedTo === undefined
-          ? await this.#fetchProfile(guid)
-          : await this.#followMerges(
-            await this.#client.getPersonByUrl(mergedTo));
+    const profile =
+      mergedTo === undefined
+        ? await this.#fetchProfile(guid)
+        : await this.#followMerges(await this.#client.getPersonByUrl(mergedTo));
     if (!('guid' in profile)) {
       console.log('No guid, no profile?');
       return undefined;
@@ -163,7 +189,8 @@ class TreeBuilder {
     try {
       console.log('Adding profile ', url);
       const fetched = await this.#followMerges(
-        await this.#client.getPersonByUrl(url));
+        await this.#client.getPersonByUrl(url),
+      );
       if (!('guid' in fetched)) {
         console.log('No guid, no profile?');
         return;
@@ -190,7 +217,7 @@ class TreeBuilder {
       console.log('Already have parents on', person.name());
     }
     // Trigger fetching of parents.
-    const strippedUnions = person.unions().map(str => {
+    const strippedUnions = person.unions().map((str) => {
       return str.split('-')[1];
     });
     try {
@@ -200,13 +227,13 @@ class TreeBuilder {
       } else if ('id' in result) {
         // When a single result is returned, it's returned
         // without a containing "results" array.
-        unions = [ result ];
+        unions = [result];
       } else {
         console.log('No results in result', result);
         this.#hooks.onMessage('Finding unions gave empty result');
         return;
       }
-    } catch(error) {
+    } catch (error) {
       console.log('Fetch unions failed, message ', error);
       return;
     }
@@ -219,8 +246,12 @@ class TreeBuilder {
   // Fetch the ancestors of person born in yearLimit or later. If
   // generations is given, stop after that many generations as well.
   // Profiles already in the database are not fetched again.
-  async buildTreeForPerson(person, birthYearAssumption, yearLimit,
-                           generations = Infinity) {
+  async buildTreeForPerson(
+    person,
+    birthYearAssumption,
+    yearLimit,
+    generations = Infinity,
+  ) {
     if (this.#client.stopped || generations <= 0) {
       return;
     }
@@ -230,8 +261,7 @@ class TreeBuilder {
     }
     const birth = person.attribute('birth');
     let birthYear = birthYearAssumption;
-    if (birth && 'date' in birth
-        && 'year' in birth.date) {
+    if (birth && 'date' in birth && 'year' in birth.date) {
       birthYear = birth.date.year + 0;
     }
     if (birthYear < yearLimit) {
@@ -247,7 +277,7 @@ class TreeBuilder {
     }
     if (!person.father() || !person.mother()) {
       // Fill in person records for father and mother.
-      const promises = person.parents.map(async parentId => {
+      const promises = person.parents.map(async (parentId) => {
         let parentPerson = this.#db.getByIdAttribute(urlToId(parentId));
         if (!parentPerson) {
           parentPerson = await this.#addProfileByUrl(parentId);
@@ -270,8 +300,12 @@ class TreeBuilder {
         // somehow ref to father got stored, but not father
         dbFather = await this.#fetchPersonByGuid(person.father());
       }
-      await this.buildTreeForPerson(dbFather, birthYear - 30, yearLimit,
-                                    generations - 1);
+      await this.buildTreeForPerson(
+        dbFather,
+        birthYear - 30,
+        yearLimit,
+        generations - 1,
+      );
     }
     if (person.mother()) {
       let dbMother = this.#db.get(person.mother());
@@ -279,8 +313,12 @@ class TreeBuilder {
         // somehow ref to mother got stored, but not mother
         dbMother = await this.#fetchPersonByGuid(person.mother());
       }
-      await this.buildTreeForPerson(dbMother, birthYear - 30, yearLimit,
-                                    generations - 1);
+      await this.buildTreeForPerson(
+        dbMother,
+        birthYear - 30,
+        yearLimit,
+        generations - 1,
+      );
     }
   }
 
@@ -302,11 +340,13 @@ class TreeBuilder {
     }
     const waiting = this.#refreshPool.get(id);
     if (waiting) {
-      birthYearAssumption = Math.max(birthYearAssumption,
-                                     waiting.birthYearAssumption);
+      birthYearAssumption = Math.max(
+        birthYearAssumption,
+        waiting.birthYearAssumption,
+      );
       yearLimit = Math.min(yearLimit, waiting.yearLimit);
     }
-    this.#refreshPool.set(id, {birthYearAssumption, yearLimit});
+    this.#refreshPool.set(id, { birthYearAssumption, yearLimit });
   }
 
   // Refresh the profiles in the pool until it is empty, adding the parents
@@ -322,8 +362,9 @@ class TreeBuilder {
     await null;
     try {
       while (this.#refreshPool.size > 0 && !this.#client.stopped) {
-        const [id, {birthYearAssumption, yearLimit}] =
-              this.#refreshPool.entries().next().value;
+        const [id, { birthYearAssumption, yearLimit }] = this.#refreshPool
+          .entries()
+          .next().value;
         this.#refreshPool.delete(id);
         // The profile may have been merged into another since it was added.
         let person = this.#db.get(id);
@@ -401,8 +442,10 @@ class TreeBuilder {
     } else {
       // Without unions, Geni knows no parents. But every ancestor is in a
       // union with a partner, so this was not expected in a tree.
-      this.#surprise('a profile in a tree has no unions',
-                     this.#describe(person));
+      this.#surprise(
+        'a profile in a tree has no unions',
+        this.#describe(person),
+      );
       person.parents = [];
     }
     if (person.parents === undefined) {
@@ -435,25 +478,31 @@ class TreeBuilder {
     }
     // The parents are fresh from Geni now, so a mismatch is in Geni's data
     // or in how the code reads it.
-    const fathers = parents.filter(parent => parent.gender() == 'male');
-    const mothers = parents.filter(parent => parent.gender() != 'male');
+    const fathers = parents.filter((parent) => parent.gender() == 'male');
+    const mothers = parents.filter((parent) => parent.gender() != 'male');
     if (fathers.length > 1 || mothers.length > 1) {
-      this.#surprise(fathers.length > 1 ? 'two fathers'
-                     : 'two mothers, or a parent with unknown gender',
-                     this.#describe(person),
-                     parents.map(parent => ({
-                       name: parent.name(), id: parent.id(),
-                       gender: parent.gender(),
-                       fetched: fetched.has(parent.id())
-                     })));
+      this.#surprise(
+        fathers.length > 1
+          ? 'two fathers'
+          : 'two mothers, or a parent with unknown gender',
+        this.#describe(person),
+        parents.map((parent) => ({
+          name: parent.name(),
+          id: parent.id(),
+          gender: parent.gender(),
+          fetched: fetched.has(parent.id()),
+        })),
+      );
     }
     const father = fathers.at(-1)?.id();
     const mother = mothers.at(-1)?.id();
     if (!failed && ((oldFather && !father) || (oldMother && !mother))) {
       // Parents can be removed on Geni, but this may also mean that
       // resolveParents missed them.
-      this.#surprise('known parents were not found again',
-                     this.#describe(person));
+      this.#surprise(
+        'known parents were not found again',
+        this.#describe(person),
+      );
     }
     // If a parent could not be fetched, keep the old link in its place.
     person.setFather(father ?? (failed ? oldFather : undefined));

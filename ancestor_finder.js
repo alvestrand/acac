@@ -5,12 +5,12 @@ export {
   groupingAlgorithms,
   makeGroupList,
   makeRootDescendantGroups,
-  removeInnerParents
+  removeInnerParents,
 };
 
 class CommonAncestorGroup {
   constructor(rootPerson) {
-    this.persons = [ rootPerson ];
+    this.persons = [rootPerson];
     this.ancestors = new Set(rootPerson.ancestors());
     // Generations back from the farthest member to each common ancestor.
     this.generations = new Map(rootPerson.ancestorGenerations());
@@ -20,8 +20,10 @@ class CommonAncestorGroup {
     this.ancestors = this.ancestors.intersection(group.ancestors);
     const generations = new Map();
     for (const id of this.ancestors) {
-      generations.set(id, Math.max(this.generations.get(id),
-                                   group.generations.get(id)));
+      generations.set(
+        id,
+        Math.max(this.generations.get(id), group.generations.get(id)),
+      );
     }
     this.generations = generations;
   }
@@ -52,11 +54,13 @@ const scoringAlgorithms = {
   closestAncestor(group1, group2) {
     let score = 0;
     for (const id of group1.ancestors.intersection(group2.ancestors)) {
-      score = Math.max(score, 2 ** -(group1.generations.get(id)
-                                     + group2.generations.get(id)));
+      score = Math.max(
+        score,
+        2 ** -(group1.generations.get(id) + group2.generations.get(id)),
+      );
     }
     return score;
-  }
+  },
 };
 
 function mergeOverlappingGroups(groupList, score) {
@@ -64,8 +68,8 @@ function mergeOverlappingGroups(groupList, score) {
   let firstGroup;
   let secondGroup;
   let maxScore = 0;
-  groupList.forEach(entry1 => {
-    groupList.forEach(entry2 => {
+  groupList.forEach((entry1) => {
+    groupList.forEach((entry2) => {
       if (entry1 != entry2) {
         const pairScore = score(entry1, entry2);
         if (pairScore > maxScore) {
@@ -77,10 +81,10 @@ function mergeOverlappingGroups(groupList, score) {
     });
   });
   if (maxScore === 0) {
-    return groupList;  // No change
+    return groupList; // No change
   }
   firstGroup.mergeGroup(secondGroup);
-  const newGroupList = groupList.filter(group => group != secondGroup);
+  const newGroupList = groupList.filter((group) => group != secondGroup);
   return newGroupList;
 }
 
@@ -91,8 +95,9 @@ function mergeOverlappingGroups(groupList, score) {
 // most reliable common ancestors. Ties go to the more complete partner.
 function mergeMostCompleteFirst(groupList, score) {
   const byCompleteness = groupList.toSorted(
-    (a, b) => b.persons[0].completenessIndex()
-            - a.persons[0].completenessIndex());
+    (a, b) =>
+      b.persons[0].completenessIndex() - a.persons[0].completenessIndex(),
+  );
   for (const group of byCompleteness) {
     let partner;
     let maxScore = 0;
@@ -106,22 +111,29 @@ function mergeMostCompleteFirst(groupList, score) {
       }
     }
     if (partner) {
-      console.log('Merging', group.persons[0].name(), 'with', partner.persons[0].name());
+      console.log(
+        'Merging',
+        group.persons[0].name(),
+        'with',
+        partner.persons[0].name(),
+      );
       group.mergeGroup(partner);
-      return groupList.filter(entry => entry != partner);
+      return groupList.filter((entry) => entry != partner);
     }
   }
-  return groupList;  // No change
+  return groupList; // No change
 }
 
 // Start with one group per person, and merge pairs of groups until no
 // two groups share any ancestor. The score is one of scoringAlgorithms,
 // so that they can be compared on the same data. merge picks the pair:
 // by default the highest scoring one.
-function makeGroupList(personList,
-                       score = scoringAlgorithms.sharedAncestors,
-                       merge = mergeOverlappingGroups) {
-  let groupList = personList.map(person => new CommonAncestorGroup(person));
+function makeGroupList(
+  personList,
+  score = scoringAlgorithms.sharedAncestors,
+  merge = mergeOverlappingGroups,
+) {
+  let groupList = personList.map((person) => new CommonAncestorGroup(person));
   let currentSize = groupList.length;
   while (true) {
     groupList = merge(groupList, score);
@@ -142,7 +154,7 @@ function makeRootDescendantGroups(personList, db) {
   const groupList = [];
   let remaining = personList;
   while (true) {
-    const descendants = new Map();  // root id -> [person]
+    const descendants = new Map(); // root id -> [person]
     for (const person of remaining) {
       for (const id of person.ancestors()) {
         if (db.get(id).ancestors().size === 0) {
@@ -163,34 +175,41 @@ function makeRootDescendantGroups(personList, db) {
       break;
     }
     const group = new CommonAncestorGroup(members[0]);
-    members.slice(1).forEach(
-      person => group.mergeGroup(new CommonAncestorGroup(person)));
+    members
+      .slice(1)
+      .forEach((person) => group.mergeGroup(new CommonAncestorGroup(person)));
     groupList.push(group);
-    remaining = remaining.filter(person => !members.includes(person));
+    remaining = remaining.filter((person) => !members.includes(person));
   }
   return groupList.concat(
-    remaining.map(person => new CommonAncestorGroup(person)));
+    remaining.map((person) => new CommonAncestorGroup(person)),
+  );
 }
 
 // All ways of making the group list, by name, for the user to choose
 // between. Each takes a list of persons and the database they are in,
 // and returns a list of CommonAncestorGroups.
 const groupingAlgorithms = {
-  sharedAncestors: persons =>
+  sharedAncestors: (persons) =>
     makeGroupList(persons, scoringAlgorithms.sharedAncestors),
-  kinship: persons => makeGroupList(persons, scoringAlgorithms.kinship),
-  closestAncestor: persons =>
+  kinship: (persons) => makeGroupList(persons, scoringAlgorithms.kinship),
+  closestAncestor: (persons) =>
     makeGroupList(persons, scoringAlgorithms.closestAncestor),
-  sharedAncestorsCompleteness: persons =>
-    makeGroupList(persons, scoringAlgorithms.sharedAncestors,
-                  mergeMostCompleteFirst),
-  kinshipCompleteness: persons =>
-    makeGroupList(persons, scoringAlgorithms.kinship,
-                  mergeMostCompleteFirst),
-  closestAncestorCompleteness: persons =>
-    makeGroupList(persons, scoringAlgorithms.closestAncestor,
-                  mergeMostCompleteFirst),
-  rootDescendants: makeRootDescendantGroups
+  sharedAncestorsCompleteness: (persons) =>
+    makeGroupList(
+      persons,
+      scoringAlgorithms.sharedAncestors,
+      mergeMostCompleteFirst,
+    ),
+  kinshipCompleteness: (persons) =>
+    makeGroupList(persons, scoringAlgorithms.kinship, mergeMostCompleteFirst),
+  closestAncestorCompleteness: (persons) =>
+    makeGroupList(
+      persons,
+      scoringAlgorithms.closestAncestor,
+      mergeMostCompleteFirst,
+    ),
+  rootDescendants: makeRootDescendantGroups,
 };
 
 // Takes a Set(ancestor id) and removes
@@ -198,12 +217,14 @@ const groupingAlgorithms = {
 // The return value is a Set containing the person entries.
 // The theory on what to remove is a bit iffy.
 function removeInnerParents(db, groupAncestors) {
-  const ancestorList = groupAncestors.values().map(
-      ancestor => db.get(ancestor)).toArray();
+  const ancestorList = groupAncestors
+    .values()
+    .map((ancestor) => db.get(ancestor))
+    .toArray();
   let potentialInnerIdSet = new Set();
   // Theory: If a person is in the list, all their ancestors will also
   // be there, and therefore don't add new information.
-  ancestorList.map(person => {
+  ancestorList.map((person) => {
     potentialInnerIdSet = potentialInnerIdSet.union(person.ancestors());
   });
   // In theory, potentialInners is a subset of groupAncestors.
@@ -218,7 +239,9 @@ function removeInnerParents(db, groupAncestors) {
     console.log('Error: No edge people');
   }
   // Pick people records for the edge people
-  const edgePeople = edgePeopleIds.values().map(
-      ancestor => db.get(ancestor)).toArray();
+  const edgePeople = edgePeopleIds
+    .values()
+    .map((ancestor) => db.get(ancestor))
+    .toArray();
   return new Set(edgePeople);
 }

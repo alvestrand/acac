@@ -1,14 +1,21 @@
 // This file contains functions that require understanding of the way
 // Geni structures data, but do not
 
-export { urlToId, idToUrl, isolateId, resolveParents, profileFields }
+export { urlToId, idToUrl, isolateId, resolveParents, profileFields };
 
 // The profile fields the app uses, asked for with fields= so that Geni
 // leaves out the rest (about, photos, locations and so on).
 // merged_into is listed so that merges are still reported.
 const profileFields = [
-  'id', 'guid', 'name', 'gender', 'birth', 'unions', 'updated_at',
-  'profile_url', 'merged_into'
+  'id',
+  'guid',
+  'name',
+  'gender',
+  'birth',
+  'unions',
+  'updated_at',
+  'profile_url',
+  'merged_into',
 ];
 
 function urlToId(url) {
@@ -24,7 +31,7 @@ function idToUrl(id) {
 function isolateId(url) {
   const basepart = url.split('?')[0];
   const parts = basepart.split('/');
-  return parts[parts.length-1];
+  return parts[parts.length - 1];
 }
 
 function resolveParents(profile, unionList) {

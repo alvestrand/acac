@@ -8,15 +8,20 @@ import { profileIds } from './groups.js';
 
 // Represent the database and all groups in the GroupStore as a JSON string.
 // The current group is included even if it has not been saved.
-function exportToJsonString(db, groupStore, currentGroup, currentProfileIds,
-                            currentExcludedIds = []) {
+function exportToJsonString(
+  db,
+  groupStore,
+  currentGroup,
+  currentProfileIds,
+  currentExcludedIds = [],
+) {
   const groups = groupStore.groups();
   groups[currentGroup] = currentProfileIds;
   const excluded = {};
   const notes = {};
   for (const name of Object.keys(groups)) {
-    const ids = name === currentGroup ? currentExcludedIds
-          : groupStore.excluded(name);
+    const ids =
+      name === currentGroup ? currentExcludedIds : groupStore.excluded(name);
     if (ids.length > 0) {
       excluded[name] = ids;
     }
@@ -25,21 +30,28 @@ function exportToJsonString(db, groupStore, currentGroup, currentProfileIds,
       notes[name] = groupNotes;
     }
   }
-  return JSON.stringify({
-    ...db.toJsonObject(),
-    groups: groups,
-    excluded: excluded,
-    groupNotes: notes,
-    currentGroup: currentGroup
-  }, null, 2);
+  return JSON.stringify(
+    {
+      ...db.toJsonObject(),
+      groups: groups,
+      excluded: excluded,
+      groupNotes: notes,
+      currentGroup: currentGroup,
+    },
+    null,
+    2,
+  );
 }
 
 // Parse a string produced by exportToJsonString.
 // Throws an Error if the string is not a valid export.
 function parseExport(data) {
   const imported = JSON.parse(data);
-  if (!imported || typeof imported.persons !== 'object'
-      || typeof imported.groups !== 'object') {
+  if (
+    !imported ||
+    typeof imported.persons !== 'object' ||
+    typeof imported.groups !== 'object'
+  ) {
     throw new Error('Not a saved database');
   }
   return imported;
@@ -74,40 +86,57 @@ function applyImport(imported, db, groupStore) {
 // The members and all their known ancestors, as Person objects,
 // each person once. Follows the father and mother links in the database.
 function groupPersons(memberIds, db) {
-  let ids = new Set(memberIds.filter(id => db.get(id)));
+  let ids = new Set(memberIds.filter((id) => db.get(id)));
   for (const id of memberIds) {
     ids = ids.union(db.ancestorIds(id));
   }
-  return [...ids].map(id => db.get(id));
+  return [...ids].map((id) => db.get(id));
 }
 
 // Represent a group as a JSON string.
-function exportGroupToJsonString(groupName, memberIds, db,
-                                 excludedIds = [], notes = '') {
-  return JSON.stringify({
-    groupName: groupName,
-    members: memberIds,
-    excluded: excludedIds,
-    notes: notes,
-    persons: groupPersons(memberIds, db)
-  }, null, 2);
+function exportGroupToJsonString(
+  groupName,
+  memberIds,
+  db,
+  excludedIds = [],
+  notes = '',
+) {
+  return JSON.stringify(
+    {
+      groupName: groupName,
+      members: memberIds,
+      excluded: excludedIds,
+      notes: notes,
+      persons: groupPersons(memberIds, db),
+    },
+    null,
+    2,
+  );
 }
 
 // Parse a string produced by exportGroupToJsonString.
 // Throws an Error if the string is not a valid group file.
 function parseGroupExport(data) {
   const imported = JSON.parse(data);
-  if (!imported || typeof imported.groupName !== 'string'
-      || !Array.isArray(imported.members)
-      || !imported.members.every(id => typeof id === 'string')
-      || (imported.excluded !== undefined
-          && !(Array.isArray(imported.excluded)
-               && imported.excluded.every(id => typeof id === 'string')))
-      || (imported.notes !== undefined && typeof imported.notes !== 'string')
-      || !Array.isArray(imported.persons)
-      || !imported.persons.every(person => typeof person?.id === 'string'
-                                 && typeof person.attributes === 'object'
-                                 && person.attributes !== null)) {
+  if (
+    !imported ||
+    typeof imported.groupName !== 'string' ||
+    !Array.isArray(imported.members) ||
+    !imported.members.every((id) => typeof id === 'string') ||
+    (imported.excluded !== undefined &&
+      !(
+        Array.isArray(imported.excluded) &&
+        imported.excluded.every((id) => typeof id === 'string')
+      )) ||
+    (imported.notes !== undefined && typeof imported.notes !== 'string') ||
+    !Array.isArray(imported.persons) ||
+    !imported.persons.every(
+      (person) =>
+        typeof person?.id === 'string' &&
+        typeof person.attributes === 'object' &&
+        person.attributes !== null,
+    )
+  ) {
     throw new Error('Not a saved group');
   }
   return imported;
@@ -129,11 +158,17 @@ function timestamp(updatedAt) {
 // Returns the member ids in group order, the ids of the members excluded
 // from matching, and how many persons were added, replaced and kept.
 function mergeGroupImport(imported, db) {
-  const ids = [...new Set(imported.members.map(id => db.currentId(id)))];
-  const excluded = new Set((imported.excluded ?? []).map(
-    id => db.currentId(id)));
-  const result = { ids: ids, excluded: ids.filter(id => excluded.has(id)),
-                   added: 0, replaced: 0, kept: 0 };
+  const ids = [...new Set(imported.members.map((id) => db.currentId(id)))];
+  const excluded = new Set(
+    (imported.excluded ?? []).map((id) => db.currentId(id)),
+  );
+  const result = {
+    ids: ids,
+    excluded: ids.filter((id) => excluded.has(id)),
+    added: 0,
+    replaced: 0,
+    kept: 0,
+  };
   for (const original of imported.persons) {
     if (db.isMerged(original.id)) {
       result.kept++;
@@ -150,8 +185,10 @@ function mergeGroupImport(imported, db) {
       const person = db.addWithAttributes(record.id, record.attributes);
       person.parents = record.parents;
       result.added++;
-    } else if (timestamp(record.attributes.updated_at)
-               > timestamp(existing.attribute('updated_at'))) {
+    } else if (
+      timestamp(record.attributes.updated_at) >
+      timestamp(existing.attribute('updated_at'))
+    ) {
       const attributes = { ...record.attributes };
       attributes.father ??= existing.father();
       attributes.mother ??= existing.mother();
@@ -178,5 +215,5 @@ export {
   applyImport,
   exportGroupToJsonString,
   parseGroupExport,
-  mergeGroupImport
-}
+  mergeGroupImport,
+};
