@@ -14,7 +14,6 @@ import {
 import { groupingAlgorithms } from './ancestor_finder.js';
 import * as display from './display_functions.js';
 import { TreeBuilder } from './tree_builder.js';
-import { pathLength } from './path_to.js';
 
 let db = new Database();
 let lastDatabaseSize = 0;
@@ -719,59 +718,19 @@ async function findPathsToGroup(person) {
     const pathLengthLimit = Number(pathLengthLimitElement.value);
     const pathAgeLimit = Number(pathAgeLimitElement.value);
     const others = profileList.filter((other) => other.id() !== person.id());
-    let newProfilesAdded = 0;
-    let pathsDiscarded = 0;
-    const discardedProfileIds = new Set();
-    const pathStatusCounts = {
-      done: 0,
-      pending: 0,
-      overloaded: 0,
-      'not found': 0,
-      other: 0,
-    };
-    for (const other of others) {
-      if (client.stopped) {
-        break;
-      }
-      addProfileMessage.innerText =
-        'Finding path from ' +
-        displayName(person) +
-        ' to ' +
-        displayName(other);
-      const result = await client.getPathTo(
-        person.attribute('id'),
-        other.attribute('id'),
-        'blood',
-      );
-      const status = Object.hasOwn(pathStatusCounts, result.status)
-        ? result.status
-        : 'other';
-      pathStatusCounts[status]++;
-      if (result.status === 'done' && Array.isArray(result.relations)) {
-        if (pathLength(result) > pathLengthLimit) {
-          pathsDiscarded++;
-          continue;
-        }
-        const pathResult = await treeBuilder.addPathProfiles(
-          result.relations,
-          pathAgeLimit,
-        );
-        newProfilesAdded += pathResult.added;
-        pathResult.discarded.forEach((id) => discardedProfileIds.add(id));
-      } else {
-        console.log(
-          'Path search did not finish',
-          person.name(),
-          other.name(),
-          result,
-        );
+    const pathResult = await treeBuilder.findPathsToProfiles(
+      person,
+      others,
+      pathLengthLimit,
+      pathAgeLimit,
+      (other) => {
         addProfileMessage.innerText =
-          'Path to ' +
-          displayName(other) +
-          ': ' +
-          (result.status ?? 'unexpected response');
-      }
-    }
+          'Finding path from ' +
+          displayName(person) +
+          ' to ' +
+          displayName(other);
+      },
+    );
     followMergesInProfileList();
     buildAncestorGroups();
     addProfileMessage.innerText =
@@ -779,24 +738,24 @@ async function findPathsToGroup(person) {
       ' finding paths from ' +
       displayName(db.get(person.id()) ?? person) +
       '. Path statuses: done ' +
-      pathStatusCounts.done +
+      pathResult.statusCounts.done +
       ', pending ' +
-      pathStatusCounts.pending +
+      pathResult.statusCounts.pending +
       ', overloaded ' +
-      pathStatusCounts.overloaded +
+      pathResult.statusCounts.overloaded +
       ', not found ' +
-      pathStatusCounts['not found'] +
+      pathResult.statusCounts['not found'] +
       ', other ' +
-      pathStatusCounts.other +
+      pathResult.statusCounts.other +
       '; added ' +
-      newProfilesAdded +
+      pathResult.added +
       ' new profiles' +
       '; discarded ' +
-      pathsDiscarded +
+      pathResult.pathsDiscarded +
       ' paths over ' +
       pathLengthLimit +
       ' steps and ' +
-      discardedProfileIds.size +
+      pathResult.profilesDiscarded.length +
       ' profiles born before ' +
       pathAgeLimit;
   } catch (error) {

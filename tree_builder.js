@@ -3,7 +3,12 @@
 // The Geni client and the database are passed in, so that this can be
 // tested with a fake client; index.js does the page side.
 
-import { urlToId, idToUrl, resolveParents } from './geni_structures.js';
+import {
+  urlToId,
+  idToUrl,
+  resolveParents,
+  pathLength,
+} from './geni_structures.js';
 
 // Profiles merged on Geni are answered with a merged_into pointer to the
 // profile they were merged into, which may itself have been merged.
@@ -212,6 +217,65 @@ class TreeBuilder {
     return {
       added: Math.max(0, this.#db.size() - startingSize),
       discarded: [...discarded],
+    };
+  }
+
+  // Find paths from one profile to each target, discard paths over the
+  // configured limit, and add eligible profiles from the remaining paths.
+  // onProgress is a page hook; it receives the target before its request.
+  async findPathsToProfiles(
+    person,
+    targets,
+    pathLengthLimit,
+    birthYearLimit,
+    onProgress = () => {},
+  ) {
+    let added = 0;
+    let pathsDiscarded = 0;
+    const profilesDiscarded = new Set();
+    const statusCounts = {
+      done: 0,
+      pending: 0,
+      overloaded: 0,
+      'not found': 0,
+      other: 0,
+    };
+
+    for (const target of targets) {
+      if (this.#client.stopped) {
+        break;
+      }
+      onProgress(target);
+      const result = await this.#client.getPathTo(
+        person.attribute('id'),
+        target.attribute('id'),
+        'blood',
+      );
+      const status = Object.hasOwn(statusCounts, result.status)
+        ? result.status
+        : 'other';
+      statusCounts[status]++;
+      if (result.status !== 'done' || !Array.isArray(result.relations)) {
+        console.log('Path search did not finish', result);
+        continue;
+      }
+      if (pathLength(result) > pathLengthLimit) {
+        pathsDiscarded++;
+        continue;
+      }
+      const pathResult = await this.addPathProfiles(
+        result.relations,
+        birthYearLimit,
+      );
+      added += pathResult.added;
+      pathResult.discarded.forEach((id) => profilesDiscarded.add(id));
+    }
+
+    return {
+      added,
+      pathsDiscarded,
+      profilesDiscarded: [...profilesDiscarded],
+      statusCounts,
     };
   }
 

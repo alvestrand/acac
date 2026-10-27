@@ -1,7 +1,14 @@
 // This file contains functions that require understanding of the way
 // Geni structures data, but do not
 
-export { urlToId, idToUrl, isolateId, resolveParents, profileFields };
+export {
+  urlToId,
+  idToUrl,
+  isolateId,
+  resolveParents,
+  profileFields,
+  pathLength,
+};
 
 // The profile fields the app uses, asked for with fields= so that Geni
 // leaves out the rest (about, photos, locations and so on).
@@ -57,4 +64,16 @@ function resolveParents(profile, unionList) {
     }
   }
   return [];
+}
+
+// Number of relationship steps in a path-to response. Geni's step_count
+// is authoritative; relations includes both endpoints, so its fallback is
+// one fewer than the number of entries.
+function pathLength(result) {
+  if (result.step_count !== undefined) {
+    return Number(result.step_count);
+  }
+  return Array.isArray(result.relations)
+    ? Math.max(0, result.relations.length - 1)
+    : undefined;
 }

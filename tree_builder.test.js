@@ -131,6 +131,53 @@ test('addPathProfiles discards a path profile born before the cutoff', async () 
   expect(db.get('g20')).toBeUndefined();
 });
 
+test('findPathsToProfiles handles statuses, path limits, and eligible paths', async () => {
+  const geni = new FakeGeniClient();
+  geni.person(1, 'Start', 'female', 1900);
+  geni.person(2, 'Target', 'male', 1901);
+  geni.person(3, 'Path profile', 'female', 1700);
+  const { db, builder } = makeBuilder(geni);
+  const start = await builder.fetchProfileToAdd('g1');
+  const target = await builder.fetchProfileToAdd('g2');
+  const onProgress = jest.fn();
+  const responses = [
+    {
+      status: 'done',
+      step_count: 1,
+      relations: [{ url: idToUrl('profile-3') }],
+    },
+    { status: 'done', step_count: 2, relations: [] },
+    { status: 'pending' },
+  ];
+  geni.getPathTo = jest.fn(async () => responses.shift());
+  const tooLongTarget = { attribute: () => 'profile-3' };
+  const pendingTarget = { attribute: () => 'profile-4' };
+
+  const result = await builder.findPathsToProfiles(
+    start,
+    [target, tooLongTarget, pendingTarget],
+    1,
+    1600,
+    onProgress,
+  );
+
+  expect(result).toStrictEqual({
+    added: 1,
+    pathsDiscarded: 1,
+    profilesDiscarded: [],
+    statusCounts: {
+      done: 2,
+      pending: 1,
+      overloaded: 0,
+      'not found': 0,
+      other: 0,
+    },
+  });
+  expect(db.get('g3')).toBeDefined();
+  expect(geni.getPathTo).toHaveBeenCalledTimes(3);
+  expect(onProgress).toHaveBeenCalledWith(target);
+});
+
 test('buildTreeForPerson does not fetch profiles already known', async () => {
   const geni = makeGeni();
   const { builder } = makeBuilder(geni);
