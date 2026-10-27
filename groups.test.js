@@ -31,6 +31,27 @@ test('entries returns stored entries, or empty list for unknown group', () => {
   expect(groupStore.entries('missing')).toStrictEqual([]);
 });
 
+test('older array group format is parsed with empty notes', () => {
+  const storage = new FakeStorage();
+  storage.setItem('profileSet-legacy', JSON.stringify(['g1', 'g2']));
+  const groupStore = new GroupStore(storage);
+
+  expect(groupStore.entries('legacy')).toStrictEqual(['g1', 'g2']);
+  expect(groupStore.notes('legacy')).toBe('');
+});
+
+test('notes are stored with the group and survive member updates', () => {
+  const { storage, groupStore } = makeStore();
+  groupStore.saveNotes('new', 'Check this branch');
+  groupStore.save('new', ['g2', 'g4']);
+
+  expect(groupStore.notes('new')).toBe('Check this branch');
+  expect(JSON.parse(storage.getItem('profileSet-new'))).toStrictEqual({
+    members: ['g2', 'g4'],
+    notes: 'Check this branch'
+  });
+});
+
 test('currentName is empty when nothing is stored', () => {
   const groupStore = new GroupStore(new FakeStorage());
   expect(groupStore.currentName()).toBe('');

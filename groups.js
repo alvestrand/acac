@@ -1,7 +1,7 @@
 // Groups of profiles, kept in a Storage object (normally localStorage).
 // Each group is stored under a key of the form 'profileSet-<group name>',
-// holding a JSON array of person ids. Older versions stored whole person
-// records instead of ids; those are still accepted when reading.
+// holding a JSON object with members and notes. Older versions stored a
+// JSON array of person ids (or person records); those are still accepted.
 // Members excluded from matching are stored under 'excludedSet-<group
 // name>', as a JSON array of ids; the key is left out when none are.
 // The name of the group last worked on is stored under 'currentSet'.
@@ -30,7 +30,7 @@ class GroupStore {
       const key = this.#storage.key(i);
       if (key.startsWith(profileSetPrefix)) {
         groups[key.substring(profileSetPrefix.length)] =
-          profileIds(JSON.parse(this.#storage.getItem(key)));
+          profileIds(this.#group(key.substring(profileSetPrefix.length)).members);
       }
     }
     return groups;
@@ -43,12 +43,38 @@ class GroupStore {
   // Return the member list of a group as stored (ids, or person records
   // from older versions). Returns an empty list for unknown groups.
   entries(name) {
-    const stored = this.#storage.getItem(profileSetPrefix + name);
-    return stored ? JSON.parse(stored) : [];
+    return this.#group(name).members;
   }
 
   save(name, ids) {
-    this.#storage.setItem(profileSetPrefix + name, JSON.stringify(ids));
+    const group = this.#group(name);
+    group.members = ids;
+    this.#saveGroup(name, group);
+  }
+
+  notes(name) {
+    return this.#group(name).notes;
+  }
+
+  saveNotes(name, notes) {
+    const group = this.#group(name);
+    group.notes = notes;
+    this.#saveGroup(name, group);
+  }
+
+  #group(name) {
+    const stored = this.#storage.getItem(profileSetPrefix + name);
+    if (!stored) {
+      return { members: [], notes: '' };
+    }
+    const group = JSON.parse(stored);
+    return Array.isArray(group)
+      ? { members: group, notes: '' }
+      : { members: group.members ?? [], notes: group.notes ?? '' };
+  }
+
+  #saveGroup(name, group) {
+    this.#storage.setItem(profileSetPrefix + name, JSON.stringify(group));
   }
 
   remove(name) {

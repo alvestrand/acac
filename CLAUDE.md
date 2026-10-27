@@ -87,7 +87,7 @@ is fetched with the user's Geni login and cached in the browser.
 - `tools/count_groups.js`: run by hand (`node tools/count_groups.js
   [file] [--algorithm=a,b] [--verbose]`) to compare the grouping
   algorithms on a saved database, by default `samples/database.json`.
-- `groups.js`: `GroupStore`, groups of member ids in localStorage, with
+- `groups.js`: `GroupStore`, group members and notes in localStorage, with
   the members of each excluded from matching (profile menu).
 - `file_export.js`: save/load of the whole database, and of a single
   group with its members' ancestors (merge rule: replace a person only if

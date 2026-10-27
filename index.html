@@ -44,23 +44,35 @@
   <table id="layout">
     <tr>
       <td colspan="2">
-        <p>
-          Group:<select id="group-select"></select>
-          <span id="new-group-box" hidden>
-            Name:<input type="text" id="new-group-name"></input>
-            <button id="new-group-create">Create</button>
-            <button id="new-group-cancel">Cancel</button>
-          </span>
-          <button id="save-group">Save group</button>
-          <button id="load-group">Load group</button>
-          <input type="file" id="load-group-input" accept=".json,application/json" hidden></input>
-          <span id="group-file-message"></span>
-          </p>
-        <p>
-          Add profile:<input type="text" id="add-profile"></input>
-          <button id="add-profile-now">Add!</button>
-        </p>
-        <div id="add-profile-message"></div>
+        <table class="group-controls">
+          <tr>
+            <td class="group-actions">
+              <p>
+                Group:<select id="group-select"></select>
+                <span id="new-group-box" hidden>
+                  Name:<input type="text" id="new-group-name"></input>
+                  <button id="new-group-create">Create</button>
+                  <button id="new-group-cancel">Cancel</button>
+                </span>
+                <button id="save-group">Save group</button>
+                <button id="load-group">Load group</button>
+                <input type="file" id="load-group-input" accept=".json,application/json" hidden></input>
+                <span id="group-file-message"></span>
+              </p>
+              <p>
+                Add profile:<input type="text" id="add-profile"></input>
+                <button id="add-profile-now">Add!</button>
+              </p>
+              <div id="add-profile-message"></div>
+            </td>
+            <td class="group-notes-cell">
+              <label class="group-notes">
+                <span>Notes:</span>
+                <textarea id="group-notes" aria-label="Group notes" rows="3"></textarea>
+              </label>
+            </td>
+          </tr>
+        </table>
       </td>
     </tr>
     <tr>
