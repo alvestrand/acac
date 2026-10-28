@@ -48,6 +48,13 @@ test('connect rejects when not authorized', async () => {
   expect(client.connected).toBe(false);
 });
 
+test('connect rejects cleanly when response is undefined', async () => {
+  Geni.connect.mockImplementation((cb) => cb(undefined));
+  const client = new GeniClient('app');
+  await expect(client.connect()).rejects.toMatch('undefined');
+  expect(client.connected).toBe(false);
+});
+
 test('getPerson requests the used fields of the profile by guid and resolves with the data', async () => {
   apiHandler = (operation, args, callback) => callback({ id: 'profile-1' });
   const client = new GeniClient('app');

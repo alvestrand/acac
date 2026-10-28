@@ -378,9 +378,14 @@ class TreeBuilder {
       return;
     }
     const birth = person.attribute('birth');
-    let birthYear = birthYearAssumption;
-    if (birth && 'date' in birth && 'year' in birth.date) {
-      birthYear = birth.date.year + 0;
+    let birthYear = person.birth() ?? birthYearAssumption;
+    if (
+      person.birth() === undefined &&
+      typeof birth === 'object' &&
+      birth !== null &&
+      birth.date?.year !== undefined
+    ) {
+      birthYear = Number(birth.date.year);
     }
     if (birthYear < yearLimit) {
       console.log(`${person.name()} seems born in ${birthYear} - not looking`);

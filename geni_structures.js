@@ -52,7 +52,7 @@ function resolveParents(profile, unionList) {
       isChild = union.children.includes(idAsUrl);
     }
     if (isChild) {
-      if ('adoped_children' in union) {
+      if ('adopted_children' in union) {
         isAdopted = union.adopted_children.includes(idAsUrl);
       }
       if ('foster_children' in union) {

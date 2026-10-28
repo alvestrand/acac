@@ -28,7 +28,7 @@ class GroupStore {
     const groups = {};
     for (let i = 0; i < this.#storage.length; i++) {
       const key = this.#storage.key(i);
-      if (key.startsWith(profileSetPrefix)) {
+      if (key?.startsWith(profileSetPrefix)) {
         groups[key.substring(profileSetPrefix.length)] = profileIds(
           this.#group(key.substring(profileSetPrefix.length)).members,
         );

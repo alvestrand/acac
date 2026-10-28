@@ -156,12 +156,12 @@ class GeniClient {
         resolve();
       } else {
         Geni.connect((response) => {
-          if (response.status == 'authorized') {
+          if (response?.status == 'authorized') {
             console.log('Geni connected');
             this.connected = true;
             resolve();
           } else {
-            reject('Connect failed, status is ' + response.status);
+            reject('Connect failed, status is ' + response?.status);
           }
         });
       }
