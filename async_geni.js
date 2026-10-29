@@ -36,6 +36,7 @@ class GeniOperation {
           return;
         }
         if (data.error) {
+          console.log('Geni operation failed:', this.operation, data.error);
           if (
             data.error.type == 'ApiException' &&
             data.error.message == 'Rate limit exceeded.'
@@ -43,7 +44,6 @@ class GeniOperation {
             done('rateLimited');
             return;
           }
-          console.log('Operation failed with error', data.error);
           this.reject(data.error);
         } else {
           this.resolve(data);
@@ -51,7 +51,7 @@ class GeniOperation {
         done('answered');
       });
     } catch (error) {
-      console.log('Operation threw an error');
+      console.log('Geni operation threw an error:', this.operation, error);
       this.reject(error);
       done('failed');
     }
@@ -161,6 +161,7 @@ class GeniClient {
             this.connected = true;
             resolve();
           } else {
+            console.log('Geni connection failed:', response);
             reject('Connect failed, status is ' + response?.status);
           }
         });
