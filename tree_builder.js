@@ -3,11 +3,21 @@
 // The Geni client and the database are passed in, so that this can be
 // tested with a fake client; index.js does the page side.
 
-import { urlToId, idToUrl, resolveParents } from './geni_structures.js';
+import {
+  urlToId,
+  idToUrl,
+  resolveParents,
+  pathLength,
+} from './geni_structures.js';
 
 // Profiles merged on Geni are answered with a merged_into pointer to the
 // profile they were merged into, which may itself have been merged.
 const maxMergeSteps = 5;
+
+function profileBirthYear(profile) {
+  const year = profile.birth?.date?.year;
+  return year === undefined ? undefined : Number(year);
+}
 
 class TreeBuilder {
   #client;
@@ -172,6 +182,103 @@ class TreeBuilder {
     return this.#storeProfile(profile, stored?.id());
   }
 
+  // Add profiles from a Geni path if they meet the birth-year limit, and
+  // fetch their parent links. Path relations identify profiles, but
+  // unions define parents.
+  async addPathProfiles(relations, birthYearLimit = 1600) {
+    const startingSize = this.#db.size();
+    const discarded = new Set();
+    for (const relation of relations) {
+      if (this.#client.stopped) {
+        break;
+      }
+      if (!relation.url || !relation.url.startsWith(idToUrl(''))) {
+        console.log('Path relation has no profile API URL', relation);
+        continue;
+      }
+      const person =
+        this.#db.getByIdAttribute(urlToId(relation.url)) ??
+        (await this.#addProfileByUrl(relation.url, birthYearLimit, (url) =>
+          discarded.add(urlToId(url)),
+        ));
+      if (person) {
+        // One generation ensures this profile's unions and parent records
+        // are loaded, without recursively expanding the tree.
+        await this.buildTreeForPerson(
+          person,
+          2025,
+          -Infinity,
+          1,
+          birthYearLimit,
+          (url) => discarded.add(urlToId(url)),
+        );
+      }
+    }
+    return {
+      added: Math.max(0, this.#db.size() - startingSize),
+      discarded: [...discarded],
+    };
+  }
+
+  // Find paths from one profile to each target, discard paths over the
+  // configured limit, and add eligible profiles from the remaining paths.
+  // onProgress is a page hook; it receives the target before its request.
+  async findPathsToProfiles(
+    person,
+    targets,
+    pathLengthLimit,
+    birthYearLimit,
+    onProgress = () => {},
+  ) {
+    let added = 0;
+    let pathsDiscarded = 0;
+    const profilesDiscarded = new Set();
+    const statusCounts = {
+      done: 0,
+      pending: 0,
+      overloaded: 0,
+      'not found': 0,
+      other: 0,
+    };
+
+    for (const target of targets) {
+      if (this.#client.stopped) {
+        break;
+      }
+      onProgress(target);
+      const result = await this.#client.getPathTo(
+        person.attribute('id'),
+        target.attribute('id'),
+        'blood',
+      );
+      const status = Object.hasOwn(statusCounts, result.status)
+        ? result.status
+        : 'other';
+      statusCounts[status]++;
+      if (result.status !== 'done' || !Array.isArray(result.relations)) {
+        console.log('Path search did not finish', result);
+        continue;
+      }
+      if (pathLength(result) > pathLengthLimit) {
+        pathsDiscarded++;
+        continue;
+      }
+      const pathResult = await this.addPathProfiles(
+        result.relations,
+        birthYearLimit,
+      );
+      added += pathResult.added;
+      pathResult.discarded.forEach((id) => profilesDiscarded.add(id));
+    }
+
+    return {
+      added,
+      pathsDiscarded,
+      profilesDiscarded: [...profilesDiscarded],
+      statusCounts,
+    };
+  }
+
   // Fetch a profile by guid, following merges. Returns the person,
   // or undefined if no profile was found.
   async #fetchPersonByGuid(guid) {
@@ -185,7 +292,11 @@ class TreeBuilder {
 
   // Fetch a profile by its API URL, following merges, and add it to the
   // database. Returns the person, or undefined if it could not be fetched.
-  async #addProfileByUrl(url) {
+  async #addProfileByUrl(
+    url,
+    birthYearLimit = -Infinity,
+    onDiscard = () => {},
+  ) {
     try {
       console.log('Adding profile ', url);
       const fetched = await this.#followMerges(
@@ -193,6 +304,11 @@ class TreeBuilder {
       );
       if (!('guid' in fetched)) {
         console.log('No guid, no profile?');
+        return;
+      }
+      const birthYear = profileBirthYear(fetched);
+      if (birthYear !== undefined && birthYear < birthYearLimit) {
+        onDiscard(url);
         return;
       }
       const person = this.#storeProfile(fetched);
@@ -251,6 +367,8 @@ class TreeBuilder {
     birthYearAssumption,
     yearLimit,
     generations = Infinity,
+    profileBirthYearLimit = -Infinity,
+    onProfileDiscard = () => {},
   ) {
     if (this.#client.stopped || generations <= 0) {
       return;
@@ -280,7 +398,11 @@ class TreeBuilder {
       const promises = person.parents.map(async (parentId) => {
         let parentPerson = this.#db.getByIdAttribute(urlToId(parentId));
         if (!parentPerson) {
-          parentPerson = await this.#addProfileByUrl(parentId);
+          parentPerson = await this.#addProfileByUrl(
+            parentId,
+            profileBirthYearLimit,
+            onProfileDiscard,
+          );
         }
         if (!parentPerson) {
           console.log('Unable to fetch', parentId);
@@ -305,6 +427,8 @@ class TreeBuilder {
         birthYear - 30,
         yearLimit,
         generations - 1,
+        profileBirthYearLimit,
+        onProfileDiscard,
       );
     }
     if (person.mother()) {
@@ -318,6 +442,8 @@ class TreeBuilder {
         birthYear - 30,
         yearLimit,
         generations - 1,
+        profileBirthYearLimit,
+        onProfileDiscard,
       );
     }
   }

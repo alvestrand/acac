@@ -31,13 +31,33 @@
     <textarea id="params" rows="4" cols="80">{}</textarea>
   </p>
   <button id="run-request">Run request</button>
+  <h2>Find path between profiles</h2>
+  <p>
+    Enter Geni profile IDs or URLs. The request uses <code>path_type=closest</code>.
+    You can change the parameters in the request above after it is filled in.
+  </p>
+  <p>
+    From: <input type="text" id="path-from" size="50"
+                 value="profile-g6000000003987799076"></input><br/>
+    To: <input type="text" id="path-to" size="50"
+               placeholder="profile-2"></input>
+  </p>
+  <p>
+    Path type:
+    <select id="path-type">
+      <option value="blood" selected>blood</option>
+      <option value="inlaw">inlaw</option>
+      <option value="closest">closest</option>
+    </select>
+  </p>
+  <button id="run-path-to">Run path-to request</button>
   <h2>Request</h2>
   <pre id="request"></pre>
   <h2>Answer</h2>
   <pre id="answer"></pre>
 
   <script type="module">
-    import { profileFields } from './geni_structures.js';
+    import { isolateId, profileFields } from './geni_structures.js';
 
     const pathElement = document.getElementById('path');
     const paramsElement = document.getElementById('params');
@@ -80,37 +100,56 @@
       });
     }
 
+    async function runRequest() {
+      let params;
+      try {
+        params = JSON.parse(paramsElement.value);
+      } catch (error) {
+        requestElement.textContent = '';
+        answerElement.textContent = 'Parameters are not valid JSON: '
+          + error.message;
+        return;
+      }
+      const path = pathElement.value.trim();
+      requestElement.textContent = JSON.stringify(
+        { appId: appId, path: path, params: params }, null, 2);
+      answerElement.textContent = 'Connecting…';
+      let status;
+      try {
+        status = await connect();
+        answerElement.textContent = 'Connected (' + status
+          + '), waiting for answer…';
+      } catch (error) {
+        answerElement.textContent = String(error);
+        return;
+      }
+      const started = Date.now();
+      // Geni modifies the params argument, so pass a copy.
+      Geni.api(path, structuredClone(params), data => {
+        answerElement.textContent = 'Connected (' + status + ').\n'
+          + 'Answer after ' + (Date.now() - started) + ' ms:\n'
+          + JSON.stringify(data, null, 2);
+      });
+    }
+
     document.getElementById('run-request').addEventListener(
+      'click', runRequest);
+
+    document.getElementById('run-path-to').addEventListener(
       'click', async () => {
-        let params;
-        try {
-          params = JSON.parse(paramsElement.value);
-        } catch (error) {
-          requestElement.textContent = '';
-          answerElement.textContent = 'Parameters are not valid JSON: '
-            + error.message;
+        const from = isolateId(
+          document.getElementById('path-from').value.trim());
+        const to = isolateId(
+          document.getElementById('path-to').value.trim());
+        if (!from || !to) {
+          answerElement.textContent = 'Enter both profile IDs or URLs.';
           return;
         }
-        const path = pathElement.value.trim();
-        requestElement.textContent = JSON.stringify(
-          { appId: appId, path: path, params: params }, null, 2);
-        answerElement.textContent = 'Connecting…';
-        let status;
-        try {
-          status = await connect();
-          answerElement.textContent = 'Connected (' + status
-            + '), waiting for answer…';
-        } catch (error) {
-          answerElement.textContent = String(error);
-          return;
-        }
-        const started = Date.now();
-        // Geni modifies the params argument, so pass a copy.
-        Geni.api(path, structuredClone(params), data => {
-          answerElement.textContent = 'Connected (' + status + ').\n'
-            + 'Answer after ' + (Date.now() - started) + ' ms:\n'
-            + JSON.stringify(data, null, 2);
-        });
+        pathElement.value = '/' + from + '/path-to/' + to;
+        paramsElement.value = JSON.stringify({
+          path_type: document.getElementById('path-type').value
+        }, null, 2);
+        await runRequest();
       });
   </script>
 </body>

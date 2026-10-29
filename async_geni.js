@@ -188,6 +188,20 @@ class GeniClient {
     });
   }
 
+  async getPathTo(fromProfileId, toProfileId, pathType = 'blood') {
+    return new Promise((resolve, reject) => {
+      const from = urlToId(fromProfileId);
+      const to = urlToId(toProfileId);
+      const op = new GeniOperation(
+        '/' + from + '/path-to/' + to,
+        { path_type: pathType },
+        resolve,
+        reject,
+      );
+      this.#enqueue(op);
+    });
+  }
+
   // Geni also has a profile/ancestors call, returning 5 generations of
   // ancestors at once. It is not used, because Geni only allows it for
   // the logged-in user's own profile, and answers "Permission denied"

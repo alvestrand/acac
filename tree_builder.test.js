@@ -2,6 +2,7 @@ import { jest } from '@jest/globals';
 import { Database } from './database.js';
 import { FakeGeniClient } from './fake_geni_client.js';
 import { TreeBuilder } from './tree_builder.js';
+import { idToUrl } from './geni_structures.js';
 
 beforeEach(() => {
   jest.spyOn(console, 'log').mockImplementation(() => {});
@@ -71,6 +72,110 @@ test('buildTreeForPerson stops after the generations asked for', async () => {
   const person = await builder.fetchProfileToAdd('g1');
   await builder.buildTreeForPerson(person, 2025, -Infinity, 1);
   expect(db.ancestorIds('g1')).toStrictEqual(new Set(['g2', 'g3']));
+});
+
+test('addPathProfiles stores path profiles by guid and links parents from unions', async () => {
+  const geni = new FakeGeniClient();
+  geni.person(20, 'Path profile', 'female', 1700);
+  geni.person(21, 'Path father', 'male', 1670);
+  geni.person(22, 'Path mother', 'female', 1672);
+  geni.union(30, [21, 22], [20]);
+  const { db, builder } = makeBuilder(geni);
+
+  const result = await builder.addPathProfiles([
+    { name: 'Path profile', relation: 'brother', url: idToUrl('profile-20') },
+  ]);
+
+  expect(result).toStrictEqual({ added: 3, discarded: [] });
+  expect(db.get('g20').name()).toBe('Path profile');
+  expect(db.get('g20').father()).toBe('g21');
+  expect(db.get('g20').mother()).toBe('g22');
+  expect(db.get('g20').parents).toStrictEqual([
+    idToUrl('profile-21'),
+    idToUrl('profile-22'),
+  ]);
+});
+
+test('addPathProfiles discards parents born before 1600', async () => {
+  const geni = new FakeGeniClient();
+  geni.person(20, 'Path profile', 'female', 1700);
+  geni.person(21, 'Old father', 'male', 1599);
+  geni.person(22, '1600 mother', 'female', 1600);
+  geni.union(30, [21, 22], [20]);
+  const { db, builder } = makeBuilder(geni);
+
+  const result = await builder.addPathProfiles(
+    [{ url: idToUrl('profile-20') }],
+    1600,
+  );
+
+  expect(result).toStrictEqual({ added: 2, discarded: ['profile-21'] });
+  expect(db.get('g20')).toBeDefined();
+  expect(db.get('g21')).toBeUndefined();
+  expect(db.get('g22')).toBeDefined();
+  expect(db.get('g20').father()).toBeUndefined();
+  expect(db.get('g20').mother()).toBe('g22');
+});
+
+test('addPathProfiles discards a path profile born before the cutoff', async () => {
+  const geni = new FakeGeniClient();
+  geni.person(20, 'Too old', 'female', 1599);
+  const { db, builder } = makeBuilder(geni);
+
+  const result = await builder.addPathProfiles(
+    [{ url: idToUrl('profile-20') }],
+    1600,
+  );
+
+  expect(result).toStrictEqual({ added: 0, discarded: ['profile-20'] });
+  expect(db.get('g20')).toBeUndefined();
+});
+
+test('findPathsToProfiles handles statuses, path limits, and eligible paths', async () => {
+  const geni = new FakeGeniClient();
+  geni.person(1, 'Start', 'female', 1900);
+  geni.person(2, 'Target', 'male', 1901);
+  geni.person(3, 'Path profile', 'female', 1700);
+  const { db, builder } = makeBuilder(geni);
+  const start = await builder.fetchProfileToAdd('g1');
+  const target = await builder.fetchProfileToAdd('g2');
+  const onProgress = jest.fn();
+  const responses = [
+    {
+      status: 'done',
+      step_count: 1,
+      relations: [{ url: idToUrl('profile-3') }],
+    },
+    { status: 'done', step_count: 2, relations: [] },
+    { status: 'pending' },
+  ];
+  geni.getPathTo = jest.fn(async () => responses.shift());
+  const tooLongTarget = { attribute: () => 'profile-3' };
+  const pendingTarget = { attribute: () => 'profile-4' };
+
+  const result = await builder.findPathsToProfiles(
+    start,
+    [target, tooLongTarget, pendingTarget],
+    1,
+    1600,
+    onProgress,
+  );
+
+  expect(result).toStrictEqual({
+    added: 1,
+    pathsDiscarded: 1,
+    profilesDiscarded: [],
+    statusCounts: {
+      done: 2,
+      pending: 1,
+      overloaded: 0,
+      'not found': 0,
+      other: 0,
+    },
+  });
+  expect(db.get('g3')).toBeDefined();
+  expect(geni.getPathTo).toHaveBeenCalledTimes(3);
+  expect(onProgress).toHaveBeenCalledWith(target);
 });
 
 test('buildTreeForPerson does not fetch profiles already known', async () => {
