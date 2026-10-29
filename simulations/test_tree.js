@@ -48,7 +48,7 @@ function addGeneration(generation, childCount) {
         }
         db.addWithAttributes(name, {
           name: name,
-          birth: generation,
+          birth: { date: { year: generation } },
           father: father.id(),
           mother: mother.id(),
           gender: gender,
@@ -80,12 +80,12 @@ function buildTestTree(startingPopulation, generations, childCount) {
     db.addWithAttributes('progM' + i, {
       name: 'progM' + i,
       gender: 'male',
-      birth: 0,
+      birth: { date: { year: 0 } },
     });
     db.addWithAttributes('progF' + i, {
       name: 'progF' + i,
       gender: 'female',
-      birth: 0,
+      birth: { date: { year: 0 } },
     });
   }
   db.get('progM1').markers.add('Mark');

@@ -3,75 +3,79 @@
 </head>
 <body>
   <script src="https://geni.com/jsdk.js"></script>
-  <script src="opfsdb.js" type="module"></script>
   <h1>This page should access Geni</h1>
   
-  <script>
+  <script type="module">
+    let appId = '';
+    try {
+      const response = await fetch('.geni_app_id');
+      if (response.ok) {
+        appId = (await response.text()).trim();
+      }
+    } catch (e) {
+      console.log('Error reading .geni_app_id', e);
+    }
     Geni.init({
-        app_id: '5rdzr2EgUJfzDJFWrP0yXRCCqblQTbZnzKrGu3lq',
-        cookie: true,
-        logging: true,
+      app_id: appId,
+      cookie: true,
+      logging: true,
     });
     console.log('Geni.init finished');
     if (localStorage.getItem('TestData')) {
-        console.log('Have test data');
+      console.log('Have test data');
     }
     localStorage.setItem('TestData', 'an item');
 
-    function connect() {
-        Geni.connect(function(response) {
-            
-            console.log('Geni.connect returned', response);
-            if (response.status == 'authorized') {
-                // User is logged in and has authorized your application.
-                // You can now make authorized calls to the API.
-            
-            } else {
-                // User is either logged out, has not authorized the app or both.
-            }
-        });
+    window.connect = function connect() {
+      Geni.connect(function(response) {
+        console.log('Geni.connect returned', response);
+      });
     };
-    function fetchProfile() {
-        Geni.api('/profile', data => {
-            console.log(JSON.stringify(data, null, 2));
-        });
-    }
-    function fetchAncestors() {
-        console.log('Fetching ancestors');
-        Geni.api('/profile-3768075/ancestors', {generations: 2}, data => {
-            console.log(JSON.stringify(data, null, 2));
-        });
-    }
-    function fetchUnion() {
-        console.log('Fetching union');
-        Geni.api('/union-19647660', {only_ids: true}, data => {
-            console.log(JSON.stringify(data, null, 2));
-        });
-    }
+    window.fetchProfile = function fetchProfile() {
+      Geni.api('/profile', data => {
+        console.log(JSON.stringify(data, null, 2));
+      });
+    };
+    window.fetchAncestors = function fetchAncestors() {
+      console.log('Fetching ancestors');
+      Geni.api('/profile-3768075/ancestors', {generations: 2}, data => {
+        console.log(JSON.stringify(data, null, 2));
+      });
+    };
+    window.fetchUnion = function fetchUnion() {
+      console.log('Fetching union');
+      Geni.api('/union-19647660', {only_ids: true}, data => {
+        console.log(JSON.stringify(data, null, 2));
+      });
+    };
   </script>
-  <script type='module'>
-    import { loadDatabase, saveDatabase, db } from './localstoragedb.js';
+  <script type="module">
+    import { Database } from './database.js';
+    import { loadDatabase, saveDatabase } from './opfsdb.js';
+
+    const db = new Database();
 
     // Set up some handlers.
-    document.getElementById('load-database').addEventListener('click', () => { loadDatabase();
-                                                                               showDatabase()});
-    document.getElementById('save-database').addEventListener('click', () => { saveDatabase(); });
+    document.getElementById('load-database').addEventListener('click', async () => {
+      await loadDatabase(db);
+      showDatabase();
+    });
+    document.getElementById('save-database').addEventListener('click', async () => {
+      await saveDatabase(db);
+    });
     document.getElementById('show-database').addEventListener('click', () => { showDatabase(); });
     document.getElementById('add-record').addEventListener('click', () => { addRecord(); });
 
     function showDatabase() {
-        const display = document.getElementById('database-display');
-        console.log('show database');
-        display.innerText = db.toJsonString();
+      const display = document.getElementById('database-display');
+      console.log('show database');
+      display.innerText = db.toJsonString();
     }
 
     function addRecord() {
-        db.addWithAttributes('foo', {id: 'foo', name: 'foo name', sex: 'male'});
-        showDatabase();
+      db.addWithAttributes('foo', {id: 'foo', name: 'foo name', gender: 'male'});
+      showDatabase();
     }
-  </script>
-    
-        
   </script>
   <button onclick="connect()">Login</button>
   <button onclick="fetchProfile()">Fetch profile</button>

@@ -102,9 +102,5 @@ Geni behavior changes:
 
 ## Known Issues and Limits
 
-- `resolveParents` checks the misspelled field `adoped_children`;
-  adopted-child relationships are not detected.
-- `GeniClient.connect` assumes the SDK supplies a response, though the
-  test page has observed a callback with no response.
 - `index.js` has no automated UI tests. Test UI changes in a browser
   when possible; API behavior can be inspected with `testpage.html`.
