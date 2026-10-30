@@ -1,156 +1,264 @@
-<!DOCTYPE html>
+<!doctype html>
 <html>
-<head>
-  <link rel="stylesheet" href="index.css">
-  <title>ACAC test page</title>
-</head>
-<body>
-  <script src="https://geni.com/jsdk.js"></script>
-  <h1>ACAC test page</h1>
-  <p>
-    Runs one Geni API call on its own, outside the request queue, and
-    shows exactly what was sent and what came back.
-  </p>
-  <p>
-    Examples, as used by the main page:
-    path <code>/profile-g6000000003987799076</code> with parameters
-    <code>{"fields": "id,guid,..."}</code> fetches the fields the app uses
-    of a profile by guid (the parameters start out as this, with the
-    field list from <code>profileFields</code>), and with <code>{}</code>
-    all of the profile;
-    path <code>/union</code> with parameters
-    <code>{"ids": ["19647660", "12660231"]}</code> fetches several unions.
-  </p>
-  <p>
-    Path:<br/>
-    <input type="text" id="path" size="80"
-           value="/profile-g6000000003987799076">
-  </p>
-  <p>
-    Parameters (JSON):<br/>
-    <textarea id="params" rows="4" cols="80">{}</textarea>
-  </p>
-  <button id="run-request">Run request</button>
-  <h2>Find path between profiles</h2>
-  <p>
-    Enter Geni profile IDs or URLs. The request uses <code>path_type=closest</code>.
-    You can change the parameters in the request above after it is filled in.
-  </p>
-  <p>
-    From: <input type="text" id="path-from" size="50"
-                 value="profile-g6000000003987799076"></input><br/>
-    To: <input type="text" id="path-to" size="50"
-               placeholder="profile-2"></input>
-  </p>
-  <p>
-    Path type:
-    <select id="path-type">
-      <option value="blood" selected>blood</option>
-      <option value="inlaw">inlaw</option>
-      <option value="closest">closest</option>
-    </select>
-  </p>
-  <button id="run-path-to">Run path-to request</button>
-  <h2>Request</h2>
-  <pre id="request"></pre>
-  <h2>Answer</h2>
-  <pre id="answer"></pre>
+  <head>
+    <link rel="stylesheet" href="index.css" />
+    <title>ACAC test page</title>
+  </head>
+  <body>
+    <script src="https://geni.com/jsdk.js"></script>
+    <h1>ACAC test page</h1>
+    <p>
+      Runs one Geni API call on its own, outside the request queue, and shows
+      exactly what was sent and what came back.
+    </p>
+    <p>
+      Examples, as used by the main page: path
+      <code>/profile-g6000000003987799076</code> with parameters
+      <code>{"fields": "id,guid,..."}</code> fetches the fields the app uses of
+      a profile by guid (the parameters start out as this, with the field list
+      from <code>profileFields</code>), and with <code>{}</code> all of the
+      profile; path <code>/union</code> with parameters
+      <code>{"ids": ["19647660", "12660231"]}</code> fetches several unions.
+    </p>
+    <p>
+      Path:<br />
+      <input
+        type="text"
+        id="path"
+        size="80"
+        value="/profile-g6000000003987799076"
+      />
+    </p>
+    <p>
+      Parameters (JSON):<br />
+      <textarea id="params" rows="4" cols="80">{}</textarea>
+    </p>
+    <button id="run-request">Run request</button>
+    <h2>Find path between profiles</h2>
+    <p>
+      Enter Geni profile IDs or URLs. The request uses
+      <code>path_type=closest</code>. You can change the parameters in the
+      request above after it is filled in.
+    </p>
+    <p>
+      From:
+      <input
+        type="text"
+        id="path-from"
+        size="50"
+        value="profile-g6000000003987799076"
+      /><br />
+      To: <input type="text" id="path-to" size="50" placeholder="profile-2" />
+    </p>
+    <p>
+      Path type:
+      <select id="path-type">
+        <option value="blood" selected>blood</option>
+        <option value="inlaw">inlaw</option>
+        <option value="closest">closest</option>
+      </select>
+    </p>
+    <button id="run-path-to">Run path-to request</button>
+    <h2>Look up a profile in the local database</h2>
+    <p>
+      Enter a Geni profile URL or GUID to show its stored database record and
+      group members whose ancestors include that profile.
+    </p>
+    <p>
+      Profile URL or GUID:
+      <input type="text" id="database-profile" size="60" />
+      <button id="lookup-database-profile">Look up profile</button>
+    </p>
+    <h3>Database record</h3>
+    <pre id="database-record"></pre>
+    <h3>Group members with this ancestor</h3>
+    <pre id="database-group-members"></pre>
+    <h2>Request</h2>
+    <pre id="request"></pre>
+    <h2>Answer</h2>
+    <pre id="answer"></pre>
 
-  <script type="module">
-    import { isolateId, profileFields } from './geni_structures.js';
+    <script type="module">
+      import { isolateId, profileFields } from './geni_structures.js';
+      import { Database } from './database.js';
+      import { loadDatabase } from './opfsdb.js';
+      import { GroupStore } from './groups.js';
 
-    const pathElement = document.getElementById('path');
-    const paramsElement = document.getElementById('params');
-    const requestElement = document.getElementById('request');
-    const answerElement = document.getElementById('answer');
+      const pathElement = document.getElementById('path');
+      const paramsElement = document.getElementById('params');
+      const requestElement = document.getElementById('request');
+      const answerElement = document.getElementById('answer');
+      const databaseRecordElement = document.getElementById('database-record');
+      const groupMembersElement = document.getElementById(
+        'database-group-members',
+      );
 
-    // Start with the parameters the app uses for profile requests.
-    paramsElement.value = JSON.stringify(
-      { fields: profileFields.join(',') });
+      const database = new Database();
+      const groupStore = new GroupStore(localStorage);
+      let databaseLoaded;
+      function getDatabase() {
+        if (!databaseLoaded) {
+          databaseLoaded = loadDatabase(database);
+        }
+        return databaseLoaded.then(() => database);
+      }
 
-    const response = await fetch('.geni_app_id');
-    if (!response.ok) {
-      answerElement.textContent = 'Could not read .geni_app_id: '
-        + response.status;
-      throw new Error('No Geni app id');
-    }
-    const appId = (await response.text()).trim();
-    Geni.init({ app_id: appId, cookie: true, logging: true });
+      // Start with the parameters the app uses for profile requests.
+      paramsElement.value = JSON.stringify({ fields: profileFields.join(',') });
 
-    // Connect once per page load, like GeniClient.connect.
-    // Resolves with the connect status, or 'no status' if Geni
-    // gave none.
-    let connected = false;
-    function connect() {
-      return new Promise((resolve, reject) => {
-        if (connected) {
-          resolve('already connected');
+      const response = await fetch('.geni_app_id');
+      if (!response.ok) {
+        answerElement.textContent =
+          'Could not read .geni_app_id: ' + response.status;
+        throw new Error('No Geni app id');
+      }
+      const appId = (await response.text()).trim();
+      Geni.init({ app_id: appId, cookie: true, logging: true });
+
+      // Connect once per page load, like GeniClient.connect.
+      // Resolves with the connect status, or 'no status' if Geni
+      // gave none.
+      let connected = false;
+      function connect() {
+        return new Promise((resolve, reject) => {
+          if (connected) {
+            resolve('already connected');
+            return;
+          }
+          Geni.connect((response) => {
+            if (response === undefined) {
+              resolve('no status');
+            } else if (response.status == 'authorized') {
+              connected = true;
+              resolve(response.status);
+            } else {
+              reject('Connect failed, status is ' + response.status);
+            }
+          });
+        });
+      }
+
+      async function runRequest() {
+        let params;
+        try {
+          params = JSON.parse(paramsElement.value);
+        } catch (error) {
+          requestElement.textContent = '';
+          answerElement.textContent =
+            'Parameters are not valid JSON: ' + error.message;
           return;
         }
-        Geni.connect(response => {
-          if (response === undefined) {
-            resolve('no status');
-          } else if (response.status == 'authorized') {
-            connected = true;
-            resolve(response.status);
-          } else {
-            reject('Connect failed, status is ' + response.status);
+        const path = pathElement.value.trim();
+        requestElement.textContent = JSON.stringify(
+          { appId: appId, path: path, params: params },
+          null,
+          2,
+        );
+        answerElement.textContent = 'Connecting…';
+        let status;
+        try {
+          status = await connect();
+          answerElement.textContent =
+            'Connected (' + status + '), waiting for answer…';
+        } catch (error) {
+          answerElement.textContent = String(error);
+          return;
+        }
+        const started = Date.now();
+        // Geni modifies the params argument, so pass a copy.
+        Geni.api(path, structuredClone(params), (data) => {
+          answerElement.textContent =
+            'Connected (' +
+            status +
+            ').\n' +
+            'Answer after ' +
+            (Date.now() - started) +
+            ' ms:\n' +
+            JSON.stringify(data, null, 2);
+        });
+      }
+
+      document
+        .getElementById('run-request')
+        .addEventListener('click', runRequest);
+
+      document
+        .getElementById('run-path-to')
+        .addEventListener('click', async () => {
+          const from = isolateId(
+            document.getElementById('path-from').value.trim(),
+          );
+          const to = isolateId(document.getElementById('path-to').value.trim());
+          if (!from || !to) {
+            answerElement.textContent = 'Enter both profile IDs or URLs.';
+            return;
+          }
+          pathElement.value = '/' + from + '/path-to/' + to;
+          paramsElement.value = JSON.stringify(
+            {
+              path_type: document.getElementById('path-type').value,
+            },
+            null,
+            2,
+          );
+          await runRequest();
+        });
+
+      document
+        .getElementById('lookup-database-profile')
+        .addEventListener('click', async () => {
+          databaseRecordElement.textContent = 'Loading database…';
+          groupMembersElement.textContent = '';
+          try {
+            await getDatabase();
+            const profileId = isolateId(
+              document.getElementById('database-profile').value.trim(),
+            );
+            if (!profileId) {
+              databaseRecordElement.textContent =
+                'Enter a profile URL or GUID.';
+              return;
+            }
+            const person =
+              database.get(profileId) ?? database.getByIdAttribute(profileId);
+            if (!person) {
+              databaseRecordElement.textContent =
+                'Profile not found in database.';
+              groupMembersElement.textContent = 'No group members found.';
+              return;
+            }
+            databaseRecordElement.textContent = JSON.stringify(
+              database.toJsonObject().persons[person.id()],
+              null,
+              2,
+            );
+
+            const matches = [];
+            for (const [groupName, memberIds] of Object.entries(
+              groupStore.groups(),
+            )) {
+              for (const memberId of memberIds) {
+                const member = database.get(memberId);
+                if (
+                  member &&
+                  database.ancestorIds(member.id()).has(person.id())
+                ) {
+                  matches.push({
+                    group: groupName,
+                    id: member.id(),
+                    name: member.name(),
+                  });
+                }
+              }
+            }
+            groupMembersElement.textContent = matches.length
+              ? JSON.stringify(matches, null, 2)
+              : 'No group members found.';
+          } catch (error) {
+            databaseRecordElement.textContent =
+              'Could not load database: ' + error.message;
           }
         });
-      });
-    }
-
-    async function runRequest() {
-      let params;
-      try {
-        params = JSON.parse(paramsElement.value);
-      } catch (error) {
-        requestElement.textContent = '';
-        answerElement.textContent = 'Parameters are not valid JSON: '
-          + error.message;
-        return;
-      }
-      const path = pathElement.value.trim();
-      requestElement.textContent = JSON.stringify(
-        { appId: appId, path: path, params: params }, null, 2);
-      answerElement.textContent = 'Connecting…';
-      let status;
-      try {
-        status = await connect();
-        answerElement.textContent = 'Connected (' + status
-          + '), waiting for answer…';
-      } catch (error) {
-        answerElement.textContent = String(error);
-        return;
-      }
-      const started = Date.now();
-      // Geni modifies the params argument, so pass a copy.
-      Geni.api(path, structuredClone(params), data => {
-        answerElement.textContent = 'Connected (' + status + ').\n'
-          + 'Answer after ' + (Date.now() - started) + ' ms:\n'
-          + JSON.stringify(data, null, 2);
-      });
-    }
-
-    document.getElementById('run-request').addEventListener(
-      'click', runRequest);
-
-    document.getElementById('run-path-to').addEventListener(
-      'click', async () => {
-        const from = isolateId(
-          document.getElementById('path-from').value.trim());
-        const to = isolateId(
-          document.getElementById('path-to').value.trim());
-        if (!from || !to) {
-          answerElement.textContent = 'Enter both profile IDs or URLs.';
-          return;
-        }
-        pathElement.value = '/' + from + '/path-to/' + to;
-        paramsElement.value = JSON.stringify({
-          path_type: document.getElementById('path-type').value
-        }, null, 2);
-        await runRequest();
-      });
-  </script>
-</body>
+    </script>
+  </body>
 </html>
