@@ -84,6 +84,13 @@ if (errorMessageElement.hidden) {
 }
 
 const client = new GeniClient(geniAppId);
+client.onCallbackError = (error, operation) => {
+  reportSurprise(
+    'Geni callback error',
+    operation + ': ' + (error?.message ?? String(error)),
+    error,
+  );
+};
 let currentQueueSize = 0;
 client.queueSizeView = (number, waiting) => {
   const wasBusy = currentQueueSize > 0;

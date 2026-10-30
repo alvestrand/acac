@@ -13,11 +13,12 @@ const profileParams = { fields: profileFields.join(',') };
 const rateLimitRetryDelay = 5000;
 
 class GeniOperation {
-  constructor(operation, args, resolve, reject) {
+  constructor(operation, args, resolve, reject, onCallbackError) {
     this.operation = operation;
     this.args = args;
     this.resolve = resolve;
     this.reject = reject;
+    this.onCallbackError = onCallbackError;
     // Set when the client stops fetching. Geni's answer is then ignored.
     this.cancelled = false;
   }
@@ -35,20 +36,31 @@ class GeniOperation {
         if (this.cancelled) {
           return;
         }
-        if (data.error) {
-          console.log('Geni operation failed:', this.operation, data.error);
-          if (
-            data.error.type == 'ApiException' &&
-            data.error.message == 'Rate limit exceeded.'
-          ) {
-            done('rateLimited');
-            return;
+        try {
+          if (data.error) {
+            console.log('Geni operation failed:', this.operation, data.error);
+            if (
+              data.error.type == 'ApiException' &&
+              data.error.message == 'Rate limit exceeded.'
+            ) {
+              done('rateLimited');
+              return;
+            }
+            this.reject(data.error);
+          } else {
+            this.resolve(data);
           }
-          this.reject(data.error);
-        } else {
-          this.resolve(data);
+          done('answered');
+        } catch (error) {
+          console.log('Geni callback failed:', this.operation, error);
+          try {
+            this.onCallbackError(error, this.operation);
+          } catch (reportError) {
+            console.log('Reporting Geni callback failure threw:', reportError);
+          }
+          this.reject(error);
+          done('failed');
         }
-        done('answered');
       });
     } catch (error) {
       console.log('Geni operation threw an error:', this.operation, error);
@@ -76,6 +88,8 @@ class GeniClient {
     // Called with the number of queued operations, and whether the
     // connection is waiting for the Geni rate limit.
     this.queueSizeView = (number, waiting) => {};
+    // Called when processing Geni's response callback throws.
+    this.onCallbackError = () => {};
     Geni.init({
       app_id: appId,
       cookie: true,
@@ -176,6 +190,7 @@ class GeniClient {
         profileParams,
         resolve,
         reject,
+        (error, operation) => this.onCallbackError(error, operation),
       );
       this.#enqueue(op);
     });
@@ -184,7 +199,13 @@ class GeniClient {
   async getPersonByUrl(url) {
     return new Promise((resolve, reject) => {
       const urlOp = urlToId(url);
-      const op = new GeniOperation(urlOp, profileParams, resolve, reject);
+      const op = new GeniOperation(
+        urlOp,
+        profileParams,
+        resolve,
+        reject,
+        (error, operation) => this.onCallbackError(error, operation),
+      );
       this.#enqueue(op);
     });
   }
@@ -198,6 +219,7 @@ class GeniClient {
         { path_type: pathType },
         resolve,
         reject,
+        (error, operation) => this.onCallbackError(error, operation),
       );
       this.#enqueue(op);
     });
@@ -212,7 +234,13 @@ class GeniClient {
 
   async getUnions(unions) {
     return new Promise((resolve, reject) => {
-      const op = new GeniOperation('/union', { ids: unions }, resolve, reject);
+      const op = new GeniOperation(
+        '/union',
+        { ids: unions },
+        resolve,
+        reject,
+        (error, operation) => this.onCallbackError(error, operation),
+      );
       this.#enqueue(op);
     });
   }
