@@ -143,6 +143,93 @@ function groupListEntries(groups, db) {
     }));
 }
 
+// Find every distinct known parent path from a member to an ancestor.
+function pathsToAncestor(db, member, ancestor) {
+  const paths = [];
+  function followParents(person, path, visited) {
+    if (person.id() === ancestor.id()) {
+      paths.push(path);
+      return;
+    }
+    for (const parentId of [person.father(), person.mother()]) {
+      const parent = db.get(parentId);
+      if (
+        parent &&
+        !visited.has(parent.id()) &&
+        (parent.id() === ancestor.id() || parent.ancestors().has(ancestor.id()))
+      ) {
+        followParents(
+          parent,
+          [...path, parent],
+          new Set([...visited, parent.id()]),
+        );
+      }
+    }
+  }
+  followParents(member, [member], new Set([member.id()]));
+  return paths;
+}
+
+// The cached tree does not retain union records, so treat two common
+// ancestors as a couple when they are recorded as the parents of a known
+// descendant of this group.
+function areCoParents(db, first, second, descendantIds) {
+  for (const id of descendantIds) {
+    const child = db.get(id);
+    const parents = [child?.father(), child?.mother()]
+      .filter(Boolean)
+      .map((parentId) => db.currentId(parentId));
+    if (parents.includes(first.id()) && parents.includes(second.id())) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function coupleOrder(first, second) {
+  if (first.gender() === 'male' && second.gender() === 'female') {
+    return [first, second];
+  }
+  if (first.gender() === 'female' && second.gender() === 'male') {
+    return [second, first];
+  }
+  return [first, second];
+}
+
+// Combine displayed ancestors who are known co-parents. A couple is one
+// display entry, so its descendants and paths are shown only once.
+function displayedAncestorGroups(entry, db) {
+  const ancestors = [...entry.ancestors];
+  const descendantIds = new Set(
+    entry.members.flatMap((member) => [
+      member.id(),
+      ...db.ancestorIds(member.id()),
+    ]),
+  );
+  const used = new Set();
+  const result = [];
+  ancestors.forEach((ancestor, index) => {
+    if (used.has(ancestor.id())) return;
+    const partner = ancestors
+      .slice(index + 1)
+      .find(
+        (candidate) =>
+          !used.has(candidate.id()) &&
+          areCoParents(db, ancestor, candidate, descendantIds),
+      );
+    if (partner) {
+      const [husband, wife] = coupleOrder(ancestor, partner);
+      used.add(ancestor.id());
+      used.add(partner.id());
+      result.push({ ancestors: [husband, wife] });
+    } else {
+      used.add(ancestor.id());
+      result.push({ ancestors: [ancestor] });
+    }
+  });
+  return result;
+}
+
 // Menu text for each of groupingAlgorithms.
 const algorithmLabels = {
   sharedAncestors: 'Most shared ancestors',
@@ -204,6 +291,8 @@ export {
   ancestorCountDrop,
   ungroupedIds,
   groupListEntries,
+  pathsToAncestor,
+  displayedAncestorGroups,
   algorithmLabel,
   treeBuildingResult,
   dateStamp,

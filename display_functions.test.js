@@ -11,6 +11,8 @@ import {
   ancestorCountDrop,
   ungroupedIds,
   groupListEntries,
+  pathsToAncestor,
+  displayedAncestorGroups,
   algorithmLabel,
   treeBuildingResult,
   dateStamp,
@@ -144,6 +146,63 @@ test('ungroupedIds and groupListEntries split groups by size', () => {
   expect([...entries[0].ancestors].map((person) => person.id())).toStrictEqual([
     'f',
   ]);
+});
+
+test('pathsToAncestor returns every known parent path', () => {
+  const db = new Database();
+  db.addWithAttributes('ancestor', { name: 'Ancestor' });
+  db.addWithAttributes('father', {
+    name: 'Father',
+    father: 'ancestor',
+  });
+  db.addWithAttributes('mother', {
+    name: 'Mother',
+    father: 'ancestor',
+  });
+  db.addWithAttributes('member', {
+    name: 'Member',
+    father: 'father',
+    mother: 'mother',
+  });
+  db.createAncestors();
+
+  const paths = pathsToAncestor(db, db.get('member'), db.get('ancestor'));
+  expect(paths.map((path) => path.map((person) => person.id()))).toStrictEqual([
+    ['member', 'father', 'ancestor'],
+    ['member', 'mother', 'ancestor'],
+  ]);
+});
+
+test('displayedAncestorGroups pairs co-parents and orders husband first', () => {
+  const db = new Database();
+  db.addWithAttributes('other', { name: 'Other ancestor', gender: 'male' });
+  db.addWithAttributes('husband', { name: 'Husband', gender: 'male' });
+  db.addWithAttributes('wife', { name: 'Wife', gender: 'female' });
+  db.addWithAttributes('child1', {
+    name: 'Child one',
+    father: 'husband',
+    mother: 'wife',
+  });
+  db.addWithAttributes('child2', {
+    name: 'Child two',
+    father: 'husband',
+    mother: 'wife',
+  });
+  db.addWithAttributes('member1', { name: 'Member one', father: 'child1' });
+  db.addWithAttributes('member2', { name: 'Member two', father: 'child2' });
+  db.createAncestors();
+
+  const groups = displayedAncestorGroups(
+    {
+      members: [db.get('member1'), db.get('member2')],
+      ancestors: new Set([db.get('wife'), db.get('other'), db.get('husband')]),
+    },
+    db,
+  );
+
+  expect(
+    groups.map((group) => group.ancestors.map((person) => person.id())),
+  ).toStrictEqual([['husband', 'wife'], ['other']]);
 });
 
 test('algorithmLabel names the completeness variants', () => {
