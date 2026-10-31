@@ -43,6 +43,22 @@ tr.excluded {
   width: 70%;
 }
 
+.group-heading {
+  margin: 0.4em 0 0.3em;
+}
+
+.group-heading select {
+  font-size: 0.7em;
+}
+
+#group-action-buttons {
+  margin-top: 0.5em;
+}
+
+#display-path-label {
+  white-space: nowrap;
+}
+
 .group-actions p {
   margin-top: 0;
 }
@@ -102,4 +118,10 @@ tr.excluded {
   padding: 0.25em 0.5em;
   border: 1px solid black;
   background: white;
+}
+
+#documentation-link {
+  position: fixed;
+  top: 2.5em;
+  right: 0.5em;
 }

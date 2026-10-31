@@ -11,6 +11,8 @@
       margin: 0 0 0.75em 1.5em;
     }
     p { display: flow-root; }
+    .example-with-image { display: flow-root; }
+    .example-with-image p { display: block; }
     @media (max-width: 600px) {
       img.illustration {
         float: none;
@@ -53,32 +55,62 @@
       matches. This may involve searching, or even finding an ancestor
       somewhere in the tree and entering the tree from MyHeritage down to
       the match. In the end you have a profile, and the profile has an URL,
-      as seen in the top of the image.
+      as seen in the top of the image. You can also enter the profile's GUID.
     </p>
     <h2>Using ACAC to figure out the common ancestors</h2>
-    <img class="illustration" src="acac-sample-group.png" width="60%">
+    <div class="example-with-image">
+      <img
+        class="illustration"
+        src="acac-result.png"
+        width="60%"
+        alt="ACAC showing common ancestors and group members without paths"
+      >
+      <p>
+        Now go to <a href="https://acac.alvestrand.no/">ACAC</a> and choose
+        the DNA match group you're working on in the "Group" menu, or create
+        one using the "New group" button. The name should be something you
+        associate with the group, for instance
+        "Harald chr 3 pos 31 mother's side".
+      </p>
+      <p>
+        Then copy the URL found above, or enter the profile's GUID, in the
+        "Add profile" field. ACAC will then (after asking permission) search
+        Geni for the ancestors of that profile. And if we're lucky, we'll end
+        up with a display like these examples, showing ancestors for this
+        particular segment.
+      </p>
+      <p>
+        The profiles you're considering appear below the "Add profile" field,
+        and the groups with their common ancestors appear to the right. As you
+        add profiles, those groups may change and their common ancestor lists
+        may shrink. The aim is for the groups to converge on a single set of
+        ancestors that could be the source for that segment.
+      </p>
+      <p>
+        This means that all the people entered descend from those parents,
+        and one of them (we don't know which) is likely the ancestor for that
+        particular segment. All the links open the profile in a new window.
+      </p>
+      <p>
+        With "Display path" unchecked, ACAC shows the potential common
+        ancestors followed by the profiles in the group.
+      </p>
+    </div>
     <p>
-      Now go to <a href="https://acac.alvestrand.no/">ACAC</a> and
-      create a group using the "New group" function in the pulldown.
-      The name should be something you associate with the group somehow,
-      for instance "Harald chr 3 pos 31 mother's side".
-    </p>
-    <p>
-      Then copy the URL found above into the "Add profile" field.
-      ACAC will then (after asking permission) search Geni for the ancestors
-      of that profile. And if we're lucky, we'll end up with a display like
-      the one in the illustration, showing a set of ancestors for this particular segment.
-    </p>
-    <p>
-      This means that all the people entered descend from those parents,
-      and one of them (we don't know which) is likely the ancestor for
-      that particular segment.
-      All the links open the profile in a new window.
+      <img
+        class="illustration"
+        src="acac-result-expanded.png"
+        width="60%"
+        alt="ACAC showing paths from group members to common ancestors"
+      >
+      Check "Display path" to show all known paths from each profile to each
+      potential common ancestor. Different ancestors can have different paths.
     </p>
     <p>
       Hit the "save database" button to save your work so far in the browser,
       or use "save to file" to save the database to a file. Filenames are
-      automatically generated.
+      automatically generated. The database and saved groups are kept in
+      browser storage and should be available after restarting the browser.
     </p>
     <p>
       You can also use "Save group" to save the information gathered for

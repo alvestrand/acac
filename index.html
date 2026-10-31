@@ -11,26 +11,10 @@
   </div>
   <h1>All Common Ancestors Considered</h1>
   <div id="error-message" hidden></div>
-  <p>
-  To use this page:<br/>
-  Choose the DNA match group you're working on in the "Group" menu, or pick
-  "New group&hellip;" to create one.
-  Enter an URL or a GUID of a Geni profile in the "add" box.
-  <p>
-    The list of currently considered profiles will appear below the "add" box.
-    To the right, there will be a list of groups, each of which shares a set
-    of common ancestors.
-    <br/>
-    As you add profiles, the groups on the right may change, and
-    their lists of common ancestors may shrink.
-    <br/>
-    The hope is that as you add more matching profiles, the groups will
-    converge on a single set of ancestors that can be taken as "the source
-    for that segment".
-    <br/>
-    The data is stored in "local storage" in your browser, so it should be
-    recoverable after exiting the browser and restarting.
-  </p>
+  <button id="login-to-geni" hidden>Login to Geni</button>
+  <div id="documentation-link">
+    <strong><a href="doc/index.html">Documentation</a></strong>
+  </div>
   <button id="save-database">Save database</button>
   <button id="export-file">Save to file</button>
   <button id="import-file">Load from file</button>
@@ -51,22 +35,30 @@
   </label>
   <br/>
   <span id="queue-size">Queue empty</span>
-  <button id="stop-fetching">Stop fetching</button>
+  <button id="stop-fetching" hidden>Stop fetching</button>
   <table id="layout">
     <tr>
       <td colspan="2">
         <table class="group-controls">
           <tr>
             <td class="group-actions">
-              <p>
-                Group:<select id="group-select"></select>
-                <span id="new-group-box" hidden>
-                  Name:<input type="text" id="new-group-name">
-                  <button id="new-group-create">Create</button>
-                  <button id="new-group-cancel">Cancel</button>
-                </span>
+              <h2 class="group-heading">
+                <label for="group-select">Group:</label>
+                <select id="group-select"></select>
+              </h2>
+              <div id="group-action-buttons">
+                <button id="new-group">New group</button>
                 <button id="save-group">Save group</button>
                 <button id="load-group">Load group</button>
+              </div>
+              <div id="new-group-box" hidden>
+                <label>
+                  Name:<input type="text" id="new-group-name">
+                </label>
+                <button id="new-group-create">Create</button>
+                <button id="new-group-cancel">Cancel</button>
+              </div>
+              <p>
                 <input type="file" id="load-group-input" accept=".json,application/json" hidden>
                 <span id="group-file-message"></span>
               </p>
@@ -100,7 +92,9 @@
         <h2>Person groups and common ancestors</h2>
         <p>
           Grouping:<select id="algorithm-select"></select>
-          <label><input type="checkbox" id="display-path"> Display path</label>
+          <label id="display-path-label">
+            <input type="checkbox" id="display-path"> Display path
+          </label>
         </p>
         <div id="group-list">
         </div>
