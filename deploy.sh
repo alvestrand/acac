@@ -40,10 +40,31 @@ while IFS= read -r entry || [[ -n "$entry" ]]; do
   cp -- "$repo_dir/$entry" "$stage_dir/$entry"
 done < "$repo_dir/deploy-manifest.txt"
 
-# Replace the deployed files, removing stale or unrelated content while
-# preserving the manually managed app ID at the site root.
-find "$site_dir" -mindepth 1 -maxdepth 1 ! -name '.geni_app_id' \
-  -exec rm -rf -- {} +
+# Copy over deployed files without removing anything from the destination.
 cp -R -- "$stage_dir/." "$site_dir/"
 
 echo "Deployed ACAC to $site_dir"
+
+# Report files in the destination that are not part of this installation.
+# Leave cleanup to the operator so manually managed content is preserved.
+declare -A installed_files=()
+while IFS= read -r entry || [[ -n "$entry" ]]; do
+  [[ "$entry" =~ ^[[:space:]]*(#|$) ]] && continue
+  entry="${entry#"${entry%%[![:space:]]*}"}"
+  [[ "$entry" == manual:* ]] && continue
+  installed_files["$entry"]=1
+done < "$repo_dir/deploy-manifest.txt"
+
+uninstalled_files=()
+while IFS= read -r -d '' path; do
+  relative_path="${path#"$site_dir/"}"
+  [[ "$relative_path" == '.geni_app_id' ]] && continue
+  if [[ ! -v "installed_files[$relative_path]" ]]; then
+    uninstalled_files+=("$relative_path")
+  fi
+done < <(find "$site_dir" -type f -print0)
+
+if ((${#uninstalled_files[@]})); then
+  echo "Files in $site_dir not written by this install (remove manually if appropriate):"
+  printf '  %s\n' "${uninstalled_files[@]}"
+fi
