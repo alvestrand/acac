@@ -35,6 +35,7 @@ async function saveDatabaseSnapshot() {
 }
 
 const errorMessageElement = document.getElementById('error-message');
+const loginToGeniButton = document.getElementById('login-to-geni');
 
 // True if the error message shown tells of a lasting state (install
 // error, login status) rather than the outcome of an operation.
@@ -43,11 +44,14 @@ let errorMessageLasting = false;
 function showErrorMessage(message, lasting = false) {
   errorMessageElement.innerText = message;
   errorMessageElement.hidden = false;
+  loginToGeniButton.hidden =
+    message !== 'Not logged in' && message !== 'Login failed';
   errorMessageLasting = lasting;
 }
 
 function hideErrorMessage() {
   errorMessageElement.hidden = true;
+  loginToGeniButton.hidden = true;
 }
 
 // Called when the user asks for a new operation: the error message
@@ -95,6 +99,7 @@ client.queueSizeView = (number, waiting) => {
     queueSizeElement.innerText =
       'Queue size: ' + number + (waiting ? ' waiting' : '');
   }
+  stopFetchingButton.hidden = number === 0;
   if (wasBusy && number === 0) {
     // Let the request's promise handlers store any returned profiles first.
     setTimeout(() => {
@@ -140,6 +145,7 @@ const groupSelectElement = document.getElementById('group-select');
 const groupNotesElement = document.getElementById('group-notes');
 const newGroupBox = document.getElementById('new-group-box');
 const newGroupNameElement = document.getElementById('new-group-name');
+const newGroupButton = document.getElementById('new-group');
 const newGroupCreateButton = document.getElementById('new-group-create');
 const newGroupCancelButton = document.getElementById('new-group-cancel');
 const saveGroupButton = document.getElementById('save-group');
@@ -170,8 +176,6 @@ const initialsOnlyElement = document.getElementById('initials-only');
 const groupStore = new GroupStore(localStorage);
 // Name of the group currently being worked on.
 let currentGroup = '';
-// The "New group..." entry at the end of the group dropdown.
-let newGroupOption;
 
 // Fill the group dropdown with all stored groups, plus the current
 // group even if it hasn't been saved, and select the current group.
@@ -183,9 +187,6 @@ function displayGroupSelect() {
     option.textContent = name === '' ? '(unnamed)' : name;
     groupSelectElement.append(option);
   });
-  newGroupOption = document.createElement('option');
-  newGroupOption.textContent = 'New group\u2026';
-  groupSelectElement.append(newGroupOption);
   groupSelectElement.value = currentGroup;
 }
 
@@ -197,8 +198,8 @@ function selectGroup(name) {
   loadProfileList();
 }
 
-// Leave the "New group..." state without reloading the current group,
-// so that unsaved profiles are kept.
+// Cancel group creation without reloading the current group, so unsaved
+// profiles are kept.
 function cancelNewGroup() {
   newGroupBox.hidden = true;
   groupSelectElement.value = currentGroup;
@@ -866,7 +867,7 @@ function displayAncestorGroups() {
       const memberList = document.createElement('ul');
       entry.members.forEach((member) => {
         const item = document.createElement('li');
-        item.textContent = member.name() ?? '';
+        item.textContent = displayName(member);
         memberList.append(item);
       });
       section.append(memberList);
@@ -900,7 +901,7 @@ function displayAncestorGroups() {
       const pathList = document.createElement('ul');
       entry.members.forEach((member, index) => {
         const item = document.createElement('li');
-        item.append(document.createTextNode(member.name() ?? ''));
+        item.append(document.createTextNode(displayName(member)));
         const paths = pathsByMember[index];
         if (paths.length === 0) {
           item.append(' — path unavailable');
@@ -1064,13 +1065,15 @@ async function importFromFile(file) {
 // Binding actions to buttons ======================================
 
 groupSelectElement.addEventListener('change', async () => {
-  if (groupSelectElement.selectedOptions[0] === newGroupOption) {
-    newGroupNameElement.value = '';
-    newGroupBox.hidden = false;
-    newGroupNameElement.focus();
-  } else {
-    startUserOperation();
-    await switchToGroup(groupSelectElement.value);
+  startUserOperation();
+  await switchToGroup(groupSelectElement.value);
+});
+
+loginToGeniButton.addEventListener('click', async () => {
+  try {
+    await connectToGeni();
+  } catch (error) {
+    console.log('Login failed', error);
   }
 });
 
@@ -1081,6 +1084,12 @@ groupNotesElement.addEventListener('input', () => {
 newGroupCreateButton.addEventListener('click', () => {
   startUserOperation();
   createNewGroup();
+});
+
+newGroupButton.addEventListener('click', () => {
+  newGroupNameElement.value = '';
+  newGroupBox.hidden = false;
+  newGroupNameElement.focus();
 });
 
 newGroupNameElement.addEventListener('keydown', (event) => {
