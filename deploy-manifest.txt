@@ -1,0 +1,22 @@
+# Files deployed to site/ (all paths are relative to the repository root).
+index.html
+index.css
+index.js
+ancestor_finder.js
+async_geni.js
+database.js
+display_functions.js
+file_export.js
+geni_structures.js
+groups.js
+opfsdb.js
+tree_builder.js
+privacy.html
+doc/index.html
+doc/acac-result-expanded.png
+doc/acac-result.png
+doc/arne-profile-url.png
+doc/dnapainter-sample-group.png
+
+# Required at the destination, but created manually and never deployed.
+manual:.geni_app_id
