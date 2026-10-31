@@ -64,6 +64,29 @@ tr.excluded {
   resize: vertical;
 }
 
+.common-ancestor-group {
+  margin: 0 0 0.75em;
+}
+
+.common-ancestor-group h3 {
+  font-size: 1em;
+  margin: 0.35em 0 0.1em;
+}
+
+.common-ancestor-group ul {
+  list-style: none;
+  margin: 0;
+  padding-left: 0.75em;
+}
+
+.common-ancestor-group li {
+  line-height: 1.25;
+}
+
+.common-ancestor-group li a {
+  font-weight: normal;
+}
+
 #error-message {
   padding: 0.5em;
   border: 2px solid darkred;

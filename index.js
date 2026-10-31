@@ -163,6 +163,7 @@ const pathLengthLimitElement = document.getElementById('path-length-limit');
 const recalculateGroupsButton = document.getElementById('recalculate-groups');
 const groupListElement = document.getElementById('group-list');
 const algorithmSelectElement = document.getElementById('algorithm-select');
+const displayPathElement = document.getElementById('display-path');
 const initialsOnlyElement = document.getElementById('initials-only');
 
 // Groups of profiles, saved in the browser's local storage.
@@ -289,6 +290,34 @@ function profileLink(person) {
   link.target = '_blank';
   link.rel = 'noopener';
   link.textContent = displayName(person);
+  return link;
+}
+
+// A short path label. The full name is available on hover, while member
+// names still respect the initials-only setting used for screenshots.
+function pathNameLink(person, memberIds) {
+  const link = document.createElement('a');
+  link.href =
+    person.attribute('profile_url') ||
+    'https://www.geni.com/people/profile/' + person.guid();
+  link.target = '_blank';
+  link.rel = 'noopener';
+  const isMember = memberIds.has(person.id());
+  const firstName = (person.name() ?? '')
+    .replace(/\s*\([^)]*\)/g, '')
+    .trim()
+    .split(/\s+/)[0];
+  link.textContent =
+    initialsOnlyElement.checked && isMember
+      ? display.displayName(person, true, memberIds)
+      : firstName || person.id();
+  link.title = person.name() ?? '';
+  return link;
+}
+
+function fullNameProfileLink(person) {
+  const link = profileLink(person);
+  link.textContent = person.name() ?? '';
   return link;
 }
 
@@ -820,28 +849,114 @@ function buildAncestorGroups() {
 }
 
 function displayAncestorGroups() {
-  const dl = document.createElement('dl');
+  const list = document.createElement('div');
+  const memberIds = new Set(currentProfileIds());
 
-  display.groupListEntries(ancestorGroups, db).forEach((entry) => {
-    const dt = document.createElement('dt');
-    entry.members.forEach((member) => {
-      dt.appendChild(document.createTextNode(displayName(member)));
-      dt.appendChild(document.createElement('br'));
-    });
-    const dd = document.createElement('dd');
-    entry.ancestors.forEach((ancestor) => {
-      dd.appendChild(profileLink(ancestor));
-      dd.appendChild(document.createTextNode(' (' + ancestor.birth() + ') '));
-      dd.appendChild(ancestorCount(ancestor));
-      dd.appendChild(document.createElement('br'));
-    });
+  display.groupListEntries(ancestorGroups, db).forEach((entry, entryIndex) => {
+    if (entryIndex > 0) {
+      list.append(document.createElement('hr'));
+    }
+    const ancestorGroupsForDisplay = display.displayedAncestorGroups(entry, db);
+    if (!displayPathElement.checked) {
+      const section = document.createElement('section');
+      section.className = 'common-ancestor-group';
+      ancestorGroupsForDisplay.forEach((ancestorGroup) => {
+        appendAncestorHeading(section, ancestorGroup);
+      });
+      const memberList = document.createElement('ul');
+      entry.members.forEach((member) => {
+        const item = document.createElement('li');
+        item.textContent = member.name() ?? '';
+        memberList.append(item);
+      });
+      section.append(memberList);
+      list.append(section);
+      return;
+    }
 
-    dl.appendChild(dt);
-    dl.appendChild(dd);
+    ancestorGroupsForDisplay.forEach((ancestorGroup) => {
+      const pathsByMember = entry.members.map((member) =>
+        ancestorGroup.ancestors.flatMap((ancestor) =>
+          display.pathsToAncestor(db, member, ancestor),
+        ),
+      );
+      const sharedPathIds = new Set();
+      const pathCounts = new Map();
+      pathsByMember.forEach((paths) => {
+        paths.forEach((path) => {
+          path.slice(1, -1).forEach((person) => {
+            pathCounts.set(person.id(), (pathCounts.get(person.id()) ?? 0) + 1);
+          });
+        });
+      });
+      pathCounts.forEach((count, id) => {
+        if (count > 1) sharedPathIds.add(id);
+      });
+
+      const section = document.createElement('section');
+      section.className = 'common-ancestor-group';
+      appendAncestorHeading(section, ancestorGroup);
+
+      const pathList = document.createElement('ul');
+      entry.members.forEach((member, index) => {
+        const item = document.createElement('li');
+        item.append(document.createTextNode(member.name() ?? ''));
+        const paths = pathsByMember[index];
+        if (paths.length === 0) {
+          item.append(' — path unavailable');
+        } else {
+          const visiblePaths = new Map();
+          paths.forEach((path) => {
+            const beforeAncestor = path.slice(1, -1);
+            const key = beforeAncestor.map((person) => person.id()).join('/');
+            if (!visiblePaths.has(key)) {
+              visiblePaths.set(key, beforeAncestor);
+            }
+          });
+          const pathList = [...visiblePaths.values()];
+          pathList.forEach((path, pathIndex) => {
+            if (pathList.length === 1) {
+              item.append(': ');
+            } else {
+              item.append(document.createElement('br'), '↳ ');
+            }
+            if (path.length === 0) {
+              item.append('parent');
+            }
+            path.forEach((person, personIndex) => {
+              if (personIndex > 0) item.append(' → ');
+              const name = pathNameLink(person, memberIds);
+              if (sharedPathIds.has(person.id())) {
+                name.classList.add('shared-path-person');
+                name.title += ' (on multiple paths)';
+              }
+              item.append(name);
+            });
+          });
+        }
+        pathList.append(item);
+      });
+      section.append(pathList);
+      list.append(section);
+    });
   });
 
   groupListElement.innerHTML = '';
-  groupListElement.appendChild(dl);
+  groupListElement.appendChild(list);
+}
+
+function appendAncestorHeading(section, ancestorGroup) {
+  const heading = document.createElement('h3');
+  ancestorGroup.ancestors.forEach((ancestor, index) => {
+    if (index > 0) heading.append(' + ');
+    heading.append(fullNameProfileLink(ancestor));
+    if (ancestor.birth() !== undefined) {
+      heading.append(' (' + ancestor.birth() + ')');
+    }
+  });
+  heading.append(' ');
+  heading.append(ancestorCount(ancestorGroup.ancestors[0]));
+  section.append(heading);
 }
 
 // Export and import of database and groups to a file ==============
@@ -1065,6 +1180,10 @@ algorithmSelectElement.addEventListener('change', () => {
   startUserOperation();
   localStorage.setItem(algorithmKey, algorithmSelectElement.value);
   buildAncestorGroups();
+});
+
+displayPathElement.addEventListener('change', () => {
+  displayAncestorGroups();
 });
 
 // ===== Initialize the page from last saved state ====

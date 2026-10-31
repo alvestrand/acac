@@ -55,7 +55,9 @@ handles pushing branches and opening and merging pull requests. Before
 relying on uncertain Geni API behavior, check it with `testpage.html`;
 report what was verified and what remains uncertain. Describe the
 change and test results in the handoff; include screenshots for
-visible UI changes when useful.
+visible UI changes when useful. All changes must be made on a branch;
+never commit on `main`. Before committing, verify the current branch
+is not `main`.
 
 ## Security & Configuration
 
