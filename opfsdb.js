@@ -9,7 +9,7 @@
 // between, and the stored database and groups are merged into the
 // tab's before the file is written.
 import { Database } from './database.js';
-import { GroupStore, MemoryStorage, mergeGroups } from './groups.js';
+import { GroupStore, mergeGroups, readStoredGroups } from './groups.js';
 
 export { DatabaseFile };
 
@@ -34,24 +34,20 @@ async function readVersion(fileHandle) {
 
 class DatabaseFile {
   #environment;
-  #currentStorage;
-  // Where groups are kept for the current group name, which each tab
-  // keeps for itself.
-  #groupMemory = new MemoryStorage();
-  #groupStore;
+  #legacyStorage;
+  #groupStore = new GroupStore();
   // The version of the file that the tab's data is based on.
   #loadedVersion = 0;
   // The groups as of the last load or save, which the groups in the
   // file are compared with when merging.
   #baseGroups = {};
 
-  // currentStorage (normally localStorage) holds the name of the current
-  // group, and the groups of older versions, which are moved into the
-  // file the first time it is loaded without any.
-  constructor(currentStorage, environment = browserEnvironment) {
+  // legacyStorage (normally localStorage) holds the groups of older
+  // versions, which are moved into the file the first time it is loaded
+  // without any.
+  constructor(legacyStorage, environment = browserEnvironment) {
     this.#environment = environment;
-    this.#currentStorage = currentStorage;
-    this.#groupStore = new GroupStore(this.#groupMemory, currentStorage);
+    this.#legacyStorage = legacyStorage;
   }
 
   // The groups, kept in the file together with the database.
@@ -91,7 +87,7 @@ class DatabaseFile {
     // No groups in the file: take them from the older storage. The base
     // stays empty, so that all of them count as added by this tab.
     this.#baseGroups = {};
-    const oldGroups = new GroupStore(this.#currentStorage).toObject();
+    const oldGroups = readStoredGroups(this.#legacyStorage);
     this.#groupStore.replaceAll(oldGroups);
     return Object.keys(oldGroups).length > 0;
   }

@@ -58,7 +58,8 @@ function parseExport(data) {
 }
 
 // Replace the contents of the database and all groups in the GroupStore
-// with the result of parseExport. Returns the name of the current group.
+// with the result of parseExport. Returns the name of the current group
+// to select.
 // Files from older versions may have person records instead of ids
 // in the groups; these are converted to ids.
 function applyImport(imported, db, groupStore) {
@@ -72,9 +73,7 @@ function applyImport(imported, db, groupStore) {
     groupStore.saveExcluded(name, imported.excluded?.[name] ?? []);
     groupStore.saveNotes(name, imported.groupNotes?.[name] ?? '');
   }
-  const currentGroup = imported.currentGroup ?? '';
-  groupStore.setCurrentName(currentGroup);
-  return currentGroup;
+  return imported.currentGroup ?? '';
 }
 
 // A single group can also be saved to its own file, so that work on it

@@ -43,11 +43,13 @@ touching the DOM, so those calculations can be tested separately.
   descendants. The selected profile groups and their display contents
   are built in `index.js` using `display_functions.js`.
 - `groups.js`: group membership, notes, and profiles excluded from
-  matching. `GroupStore` works on a Storage object; the page keeps the
-  groups in memory and `opfsdb.js` saves them in the database file
-  (the current group's name stays in localStorage). `mergeGroups`
-  merges the groups of two tabs three ways. Both notes texts are kept,
-  separated by `\n---\n`, when both tabs changed them.
+  matching, held in memory by `GroupStore` and saved in the database
+  file by `opfsdb.js`. `mergeGroups` merges the groups of two tabs
+  three ways; both notes texts are kept, separated by `\n---\n`, when
+  both tabs changed them. `readStoredGroups` reads the groups that
+  older versions kept in localStorage. The name of the current group
+  is not part of the groups: each tab keeps its own in `index.js`,
+  remembered in localStorage.
 - `file_export.js`: whole-database and group export/import. When
   merging records, newer Geni `updated_at` data replaces older
   attributes while parent links from either record are retained.

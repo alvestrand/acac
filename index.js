@@ -203,8 +203,10 @@ const initialsOnlyElement = document.getElementById('initials-only');
 
 // Groups of profiles, saved in the database file.
 const groupStore = databaseFile.groupStore;
-// Name of the group currently being worked on.
+// Name of the group currently being worked on. Each tab has its own,
+// remembered in localStorage for the next time the page is opened.
 let currentGroup = '';
+const currentGroupKey = 'currentSet';
 
 // Fill the group dropdown with all stored groups, plus the current
 // group even if it hasn't been saved, and select the current group.
@@ -221,6 +223,7 @@ function displayGroupSelect() {
 
 function selectGroup(name) {
   currentGroup = name;
+  localStorage.setItem(currentGroupKey, name);
   newGroupBox.hidden = true;
   displayGroupSelect();
   groupNotesElement.value = groupStore.notes(name);
@@ -250,20 +253,13 @@ function saveCurrentGroupState() {
   groupStore.saveExcluded(currentGroup, currentExcludedIds());
 }
 
-// Save the database and the current group, same as the "Save database" button.
-async function saveCurrentState() {
-  await saveDatabaseSnapshot();
-  groupStore.setCurrentName(currentGroup);
-}
-
 // Save the database and the current group, then switch to another group
 // and recalculate its ancestor groups.
 async function switchToGroup(name) {
   await saveDatabaseSnapshot();
-  groupStore.switchTo(
+  groupStore.saveMembers(
     currentGroup,
     currentProfileIds(),
-    name,
     currentExcludedIds(),
   );
   selectGroup(name);
@@ -279,21 +275,14 @@ async function createNewGroup() {
 }
 
 function loadProfileList() {
-  // Entries are ids. Older versions stored whole person records,
-  // which can be used if the person is missing from the database.
   profileList = groupStore
     .entries(currentGroup)
-    .map((entry) => {
-      const id = typeof entry === 'string' ? entry : entry.id;
+    .map((id) => {
       const profile = db.get(id);
-      if (profile) {
-        return profile;
-      } else if (entry.attributes) {
-        return db.addWithAttributes(id, entry.attributes);
-      } else {
+      if (!profile) {
         console.log('Group member', id, 'not found in database');
-        return undefined;
       }
+      return profile;
     })
     .filter((profile) => profile);
   excludedProfileIds = new Set(
@@ -1053,10 +1042,9 @@ async function loadGroupFromFile(file) {
   }
   const result = mergeGroupImport(imported, db);
   await saveDatabaseSnapshot();
-  groupStore.switchTo(
+  groupStore.saveMembers(
     currentGroup,
     currentProfileIds(),
-    groupName,
     currentExcludedIds(),
   );
   groupStore.save(groupName, result.ids);
@@ -1171,7 +1159,7 @@ addProfileButton.addEventListener('click', async () => {
 
 saveDatabaseButton.addEventListener('click', async () => {
   startUserOperation();
-  await saveCurrentState();
+  await saveDatabaseSnapshot();
 });
 
 exportFileButton.addEventListener('click', () => {
@@ -1236,7 +1224,7 @@ savedProfileAdditionCount = 0;
 console.log('Database size', db.size());
 displayAlgorithmSelect();
 initialsOnlyElement.checked = localStorage.getItem(initialsOnlyKey) === 'true';
-selectGroup(groupStore.currentName());
+selectGroup(localStorage.getItem(currentGroupKey) ?? '');
 buildAncestorGroups();
 if (groupsMigrated) {
   // The groups were taken from local storage; save them in the file.

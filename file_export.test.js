@@ -1,5 +1,5 @@
 import { Database } from './database.js';
-import { GroupStore, MemoryStorage } from './groups.js';
+import { GroupStore } from './groups.js';
 import {
   exportToJsonString,
   parseExport,
@@ -18,12 +18,10 @@ function makeSourceState() {
   const child = db.addWithAttributes('g2', { id: 'profile-2', name: 'Child' });
   child.setFather('g1');
   child.parents = ['https://www.geni.com/api/profile-1'];
-  const storage = new MemoryStorage();
-  // Stored the way older versions did it, with whole person records.
-  storage.setItem('profileSet-saved', JSON.stringify([father]));
-  storage.setItem('profileSet-ids', JSON.stringify(['g2']));
-  storage.setItem('unrelated', 'keep me');
-  return { db, groupStore: new GroupStore(storage), father };
+  const groupStore = new GroupStore();
+  groupStore.save('saved', ['g1']);
+  groupStore.save('ids', ['g2']);
+  return { db, groupStore, father };
 }
 
 test('Export and import round trip restores persons and groups', () => {
@@ -32,12 +30,10 @@ test('Export and import round trip restores persons and groups', () => {
   const exported = exportToJsonString(db, groupStore, 'current', ['g2']);
 
   const db2 = new Database();
-  const storage2 = new MemoryStorage();
-  const groupStore2 = new GroupStore(storage2);
+  const groupStore2 = new GroupStore();
   const currentGroup = applyImport(parseExport(exported), db2, groupStore2);
 
   expect(currentGroup).toBe('current');
-  expect(groupStore2.currentName()).toBe('current');
   expect(db2.size()).toBe(2);
   const restoredChild = db2.get('g2');
   expect(restoredChild.name()).toBe('Child');
@@ -52,20 +48,11 @@ test('Export and import round trip restores persons and groups', () => {
   expect(groups.saved).toStrictEqual(['g1']);
   expect(groupStore2.notes('saved')).toBe('Remember this family');
   expect(groups.current).toStrictEqual(['g2']);
-  expect(JSON.parse(storage2.getItem('profileSet-saved'))).toStrictEqual({
-    members: ['g1'],
-    notes: 'Remember this family',
-  });
 });
 
 test('Export includes current group even when not in storage', () => {
   const { db } = makeSourceState();
-  const exported = exportToJsonString(
-    db,
-    new GroupStore(new MemoryStorage()),
-    'unsaved',
-    ['g2'],
-  );
+  const exported = exportToJsonString(db, new GroupStore(), 'unsaved', ['g2']);
   const parsed = parseExport(exported);
   expect(Object.keys(parsed.groups)).toStrictEqual(['unsaved']);
   expect(parsed.currentGroup).toBe('unsaved');
@@ -77,16 +64,14 @@ test('Import replaces existing persons and groups', () => {
 
   const db2 = new Database();
   db2.addWithAttributes('old', { id: 'profile-old', name: 'Old' });
-  const storage2 = new MemoryStorage();
-  storage2.setItem('profileSet-stale', '[]');
-  storage2.setItem('unrelated', 'keep me');
-  applyImport(parseExport(exported), db2, new GroupStore(storage2));
+  const groupStore2 = new GroupStore();
+  groupStore2.save('stale', []);
+  applyImport(parseExport(exported), db2, groupStore2);
 
   expect(db2.get('old')).toBeUndefined();
   expect(db2.getByIdAttribute('profile-old')).toBeUndefined();
   expect(db2.size()).toBe(2);
-  expect(storage2.getItem('profileSet-stale')).toBeNull();
-  expect(storage2.getItem('unrelated')).toBe('keep me');
+  expect(groupStore2.has('stale')).toBe(false);
 });
 
 test('Exported groups contain only ids', () => {
@@ -108,12 +93,9 @@ test('Import accepts files with whole person records in groups', () => {
     groups: { old: [father] },
     currentGroup: 'old',
   });
-  const storage2 = new MemoryStorage();
-  applyImport(parseExport(oldFormat), new Database(), new GroupStore(storage2));
-  expect(JSON.parse(storage2.getItem('profileSet-old'))).toStrictEqual({
-    members: ['g1'],
-    notes: '',
-  });
+  const groupStore2 = new GroupStore();
+  applyImport(parseExport(oldFormat), new Database(), groupStore2);
+  expect(groupStore2.entries('old')).toStrictEqual(['g1']);
 });
 
 test('parseExport rejects invalid JSON', () => {
@@ -355,15 +337,14 @@ test('Export and import round trip keeps the excluded members', () => {
     current: ['g1'],
   });
 
-  const storage2 = new MemoryStorage();
-  const groupStore2 = new GroupStore(storage2);
+  const groupStore2 = new GroupStore();
   groupStore2.save('stale', ['x']);
   groupStore2.saveExcluded('stale', ['x']);
   applyImport(parseExport(exported), new Database(), groupStore2);
   expect(groupStore2.excluded('ids')).toStrictEqual(['g2']);
   expect(groupStore2.excluded('current')).toStrictEqual(['g1']);
   expect(groupStore2.excluded('saved')).toStrictEqual([]);
-  expect(storage2.getItem('excludedSet-stale')).toBeNull();
+  expect(groupStore2.excluded('stale')).toStrictEqual([]);
 });
 
 test('Import accepts files without excluded members', () => {
@@ -373,7 +354,7 @@ test('Import accepts files without excluded members', () => {
     groups: { old: ['g1'] },
     currentGroup: 'old',
   });
-  const groupStore2 = new GroupStore(new MemoryStorage());
+  const groupStore2 = new GroupStore();
   applyImport(parseExport(oldFormat), new Database(), groupStore2);
   expect(groupStore2.excluded('old')).toStrictEqual([]);
 });

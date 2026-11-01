@@ -1,11 +1,11 @@
 import { Database } from './database.js';
-import { MemoryStorage } from './groups.js';
+import { FakeStorage } from './fake_storage.js';
 import { DatabaseFile } from './opfsdb.js';
 import { fakeEnvironment } from './fake_opfs.js';
 
 // A tab: its own database, current-group storage and DatabaseFile, on
 // the file system shared by all tabs.
-async function openTab(environment, localStorage = new MemoryStorage()) {
+async function openTab(environment, localStorage = new FakeStorage()) {
   const tab = {
     db: new Database(),
     file: new DatabaseFile(localStorage, environment),
@@ -143,13 +143,11 @@ test('a file without a version loads as version 0 and is upgraded', async () => 
 
 test('groups of older versions are moved from local storage into the file', async () => {
   const environment = fakeEnvironment();
-  const localStorage = new MemoryStorage();
+  const localStorage = new FakeStorage();
   localStorage.setItem('profileSet-old', JSON.stringify(['a']));
-  localStorage.setItem('currentSet', 'old');
   const tab = await openTab(environment, localStorage);
   expect(tab.migrated).toBe(true);
   expect(tab.file.groupStore.entries('old')).toStrictEqual(['a']);
-  expect(tab.file.groupStore.currentName()).toBe('old');
   await tab.file.save(tab.db);
   expect((await storedFile(environment)).groups.old.members).toStrictEqual([
     'a',
@@ -164,7 +162,7 @@ test('groups of older versions are moved from local storage into the file', asyn
 test('two tabs migrating the same groups end up with the union', async () => {
   const environment = fakeEnvironment();
   const makeStorage = (members) => {
-    const storage = new MemoryStorage();
+    const storage = new FakeStorage();
     storage.setItem('profileSet-g', JSON.stringify(members));
     return storage;
   };
