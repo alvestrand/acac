@@ -1,8 +1,7 @@
 import { Person, Database } from './database.js';
 import { GeniClient } from './async_geni.js';
 import { isolateId } from './geni_structures.js';
-import { loadDatabase, saveDatabase } from './opfsdb.js';
-import { GroupStore } from './groups.js';
+import { DatabaseFile } from './opfsdb.js';
 import {
   exportToJsonString,
   parseExport,
@@ -16,6 +15,9 @@ import * as display from './display_functions.js';
 import { TreeBuilder } from './tree_builder.js';
 
 let db = new Database();
+// The file the database and the groups are saved in, which may also be
+// in use by other tabs.
+const databaseFile = new DatabaseFile(localStorage);
 let lastDatabaseSize = 0;
 let profileAdditionCount = 0;
 let savedProfileAdditionCount = 0;
@@ -28,10 +30,37 @@ db.sizeView = (number) => {
   lastDatabaseSize = number;
 };
 
+// Save the database and all groups, including the unsaved state of the
+// current group. If another tab saved in the meantime, its changes are
+// merged in first, and the page is updated to show them.
 async function saveDatabaseSnapshot() {
   const additionsAtStart = profileAdditionCount;
-  await saveDatabase(db);
-  savedProfileAdditionCount = additionsAtStart;
+  saveCurrentGroupState();
+  const result = await databaseFile.save(db);
+  // Profiles added by the merge are in the file, so they need no save.
+  savedProfileAdditionCount = additionsAtStart + result.added;
+  if (result.merged) {
+    refreshAfterMerge(result.conflicts);
+  }
+}
+
+// Show the groups and profiles as they are after a merge of another
+// tab's changes into this one.
+function refreshAfterMerge(conflictNames) {
+  console.log('Merged changes saved by another tab');
+  groupNotesElement.value = groupStore.notes(currentGroup);
+  if (newGroupBox.hidden) {
+    displayGroupSelect();
+  }
+  loadProfileList();
+  buildAncestorGroups();
+  if (conflictNames.length > 0) {
+    showErrorMessage(
+      'Notes were changed in two tabs for group ' +
+        conflictNames.map((name) => '"' + name + '"').join(', ') +
+        '; both texts were kept.',
+    );
+  }
 }
 
 const errorMessageElement = document.getElementById('error-message');
@@ -172,8 +201,8 @@ const algorithmSelectElement = document.getElementById('algorithm-select');
 const displayPathElement = document.getElementById('display-path');
 const initialsOnlyElement = document.getElementById('initials-only');
 
-// Groups of profiles, saved in the browser's local storage.
-const groupStore = new GroupStore(localStorage);
+// Groups of profiles, saved in the database file.
+const groupStore = databaseFile.groupStore;
 // Name of the group currently being worked on.
 let currentGroup = '';
 
@@ -214,12 +243,16 @@ function currentExcludedIds() {
   return currentProfileIds().filter((id) => excludedProfileIds.has(id));
 }
 
-// Save the database and the current group, same as the "Save database" button.
-async function saveCurrentState() {
-  await saveDatabaseSnapshot();
+// Put the current group as shown on the page into the group store.
+function saveCurrentGroupState() {
   groupStore.save(currentGroup, currentProfileIds());
   groupStore.saveNotes(currentGroup, groupNotesElement.value);
   groupStore.saveExcluded(currentGroup, currentExcludedIds());
+}
+
+// Save the database and the current group, same as the "Save database" button.
+async function saveCurrentState() {
+  await saveDatabaseSnapshot();
   groupStore.setCurrentName(currentGroup);
 }
 
@@ -1196,7 +1229,7 @@ displayPathElement.addEventListener('change', () => {
 });
 
 // ===== Initialize the page from last saved state ====
-await loadDatabase(db);
+const groupsMigrated = await databaseFile.load(db);
 lastDatabaseSize = db.size();
 profileAdditionCount = 0;
 savedProfileAdditionCount = 0;
@@ -1205,3 +1238,7 @@ displayAlgorithmSelect();
 initialsOnlyElement.checked = localStorage.getItem(initialsOnlyKey) === 'true';
 selectGroup(groupStore.currentName());
 buildAncestorGroups();
+if (groupsMigrated) {
+  // The groups were taken from local storage; save them in the file.
+  await saveDatabaseSnapshot();
+}

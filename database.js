@@ -175,6 +175,12 @@ class Person {
   }
 }
 
+// Convert Geni's updated_at attribute (seconds since the epoch, as a
+// string) to a number. Records without a usable timestamp count as oldest.
+function timestamp(updatedAt) {
+  return Number(updatedAt) || 0;
+}
+
 class Database {
   // Person records. map of id -> Person.
   #persons;
@@ -276,6 +282,65 @@ class Database {
     });
     this.sizeView(this.#persons.size);
     return changed;
+  }
+  // Merge one person record into the database. A person already in
+  // the database is replaced only if the record has a newer timestamp;
+  // otherwise the database record is kept. Parent links are not covered
+  // by Geni's timestamp, so links found in only one of the two records
+  // are kept either way. Persons known to be merged into others on Geni
+  // are left out, and parent links to such persons are changed to the
+  // ids they were merged into. Returns 'added', 'replaced' or 'kept'.
+  mergeRecord(id, attributes, parents) {
+    if (this.isMerged(id)) {
+      return 'kept';
+    }
+    const record = { ...attributes };
+    for (const link of ['father', 'mother']) {
+      if (record[link]) {
+        record[link] = this.currentId(record[link]);
+      }
+    }
+    const existing = this.get(id);
+    if (!existing) {
+      const person = this.addWithAttributes(id, record);
+      person.parents = parents;
+      return 'added';
+    }
+    if (
+      timestamp(record.updated_at) > timestamp(existing.attribute('updated_at'))
+    ) {
+      record.father ??= existing.father();
+      record.mother ??= existing.mother();
+      const person = this.addWithAttributes(id, record);
+      person.parents = parents ?? existing.parents;
+      return 'replaced';
+    }
+    if (!existing.father() && record.father) {
+      existing.setFather(record.father);
+    }
+    if (!existing.mother() && record.mother) {
+      existing.setMother(record.mother);
+    }
+    existing.parents ??= parents;
+    return 'kept';
+  }
+  // Merge all persons and recorded Geni merges of another database into
+  // this one, using the rules of mergeRecord. Markers are combined.
+  // Returns how many persons were added, replaced and kept.
+  mergeFrom(other) {
+    const result = { added: 0, replaced: 0, kept: 0 };
+    other.#persons.forEach((person, id) => {
+      const { attributes, parents } = person.toJSON();
+      result[this.mergeRecord(id, attributes, parents)]++;
+      const mine = this.#persons.get(this.currentId(id));
+      person.markers.forEach((marker) => mine?.markers.add(marker));
+    });
+    other.#mergedInto.forEach((newId, oldId) => {
+      if (!this.isMerged(oldId)) {
+        this.merge(oldId, this.currentId(newId));
+      }
+    });
+    return result;
   }
   getByIdAttribute(idAttribute) {
     const guid = this.#idAttributeToGuidMap.get(idAttribute);

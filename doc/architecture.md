@@ -43,12 +43,25 @@ touching the DOM, so those calculations can be tested separately.
   descendants. The selected profile groups and their display contents
   are built in `index.js` using `display_functions.js`.
 - `groups.js`: group membership, notes, and profiles excluded from
-  matching, stored in localStorage.
+  matching. `GroupStore` works on a Storage object; the page keeps the
+  groups in memory and `opfsdb.js` saves them in the database file
+  (the current group's name stays in localStorage). `mergeGroups`
+  merges the groups of two tabs three ways. Both notes texts are kept,
+  separated by `\n---\n`, when both tabs changed them.
 - `file_export.js`: whole-database and group export/import. When
   merging records, newer Geni `updated_at` data replaces older
   attributes while parent links from either record are retained.
-- `opfsdb.js`: persistence of the profile database in the Origin
-  Private File System.
+- `opfsdb.js`: `DatabaseFile` persists the profile database and groups
+  in one file in the Origin Private File System. The file has a
+  version number that is incremented on each save. If the stored
+  version is higher than the one the tab last loaded or saved, another
+  tab has saved, and the stored data is merged into the tab's
+  (`Database.mergeFrom`, `mergeGroups`) before saving. Saves run under
+  a Web Lock. A file with no `groups` is migrated from localStorage.
+  Deleting profiles is not merged: a removed profile comes back from
+  another tab's file.
+- `fake_opfs.js`: in-memory fakes of the file system directory and Web
+  Locks, used by `opfsdb.test.js`.
 - `fake_geni_client.js`: an in-memory Geni API fake used by
   `tree_builder.test.js`.
 - `tools/count_groups.js`: manually compares grouping algorithms on a

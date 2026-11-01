@@ -1,8 +1,13 @@
-import { profileIds, GroupStore } from './groups.js';
-import { FakeStorage } from './fake_storage.js';
+import {
+  profileIds,
+  GroupStore,
+  MemoryStorage,
+  mergeGroups,
+  notesSeparator,
+} from './groups.js';
 
 function makeStore() {
-  const storage = new FakeStorage();
+  const storage = new MemoryStorage();
   // Stored the way older versions did it, with whole person records.
   storage.setItem(
     'profileSet-old',
@@ -36,7 +41,7 @@ test('entries returns stored entries, or empty list for unknown group', () => {
 });
 
 test('older array group format is parsed with empty notes', () => {
-  const storage = new FakeStorage();
+  const storage = new MemoryStorage();
   storage.setItem('profileSet-legacy', JSON.stringify(['g1', 'g2']));
   const groupStore = new GroupStore(storage);
 
@@ -57,7 +62,7 @@ test('notes are stored with the group and survive member updates', () => {
 });
 
 test('currentName is empty when nothing is stored', () => {
-  const groupStore = new GroupStore(new FakeStorage());
+  const groupStore = new GroupStore(new MemoryStorage());
   expect(groupStore.currentName()).toBe('');
   groupStore.setCurrentName('x');
   expect(groupStore.currentName()).toBe('x');
@@ -161,4 +166,105 @@ test('remove forgets the excluded members too', () => {
   groupStore.saveExcluded('new', ['g2']);
   groupStore.remove('new');
   expect(groupStore.excluded('new')).toStrictEqual([]);
+});
+
+function group(members, notes = '', excluded = []) {
+  return { members, notes, excluded };
+}
+
+test('toObject and replaceAll round trip', () => {
+  const { groupStore } = makeStore();
+  groupStore.saveNotes('new', 'hello');
+  groupStore.saveExcluded('new', ['g3']);
+  const copy = new GroupStore(new MemoryStorage());
+  copy.replaceAll(groupStore.toObject());
+  expect(copy.toObject()).toStrictEqual({
+    old: group(['g1']),
+    new: group(['g2', 'g3'], 'hello', ['g3']),
+  });
+  copy.replaceAll({ only: group(['x']) });
+  expect(Object.keys(copy.toObject())).toStrictEqual(['only']);
+});
+
+test('current group name is kept in its own storage', () => {
+  const groups = new MemoryStorage();
+  const current = new MemoryStorage();
+  const groupStore = new GroupStore(groups, current);
+  groupStore.setCurrentName('x');
+  expect(current.getItem('currentSet')).toBe('x');
+  expect(groups.getItem('currentSet')).toBeNull();
+  expect(groupStore.currentName()).toBe('x');
+});
+
+test('mergeGroups keeps additions of both tabs and removals of mine', () => {
+  const base = { g: group(['a', 'b', 'c'], '', ['a']) };
+  const mine = { g: group(['a', 'c', 'm'], '', []) };
+  const theirs = { g: group(['a', 'b', 'c', 't'], '', ['a', 'c']) };
+  const result = mergeGroups(base, mine, theirs);
+  expect(result.groups.g.members).toStrictEqual(['a', 'c', 't', 'm']);
+  expect(result.groups.g.excluded).toStrictEqual(['c']);
+  expect(result.conflicts).toStrictEqual([]);
+});
+
+test('mergeGroups takes notes changed in only one tab', () => {
+  const base = { g: group([], 'old') };
+  expect(mergeGroups(base, { g: group([], 'mine') }, base).groups.g.notes).toBe(
+    'mine',
+  );
+  expect(
+    mergeGroups(base, base, { g: group([], 'theirs') }).groups.g.notes,
+  ).toBe('theirs');
+});
+
+test('mergeGroups keeps both notes texts on a conflict', () => {
+  const base = { g: group([], 'old') };
+  const result = mergeGroups(
+    base,
+    { g: group([], 'mine') },
+    { g: group([], 'theirs') },
+  );
+  expect(result.groups.g.notes).toBe('theirs' + notesSeparator + 'mine');
+  expect(notesSeparator).toBe('\n---\n');
+  expect(result.conflicts).toStrictEqual(['g']);
+});
+
+test('mergeGroups treats a group created in both tabs as a merge', () => {
+  const result = mergeGroups(
+    {},
+    { g: group(['a'], 'mine') },
+    { g: group(['b'], '') },
+  );
+  expect(result.groups.g).toStrictEqual(group(['b', 'a'], 'mine'));
+  expect(result.conflicts).toStrictEqual([]);
+});
+
+test('mergeGroups keeps groups created in one tab', () => {
+  const result = mergeGroups({}, { m: group(['a']) }, { t: group(['b']) });
+  expect(Object.keys(result.groups)).toStrictEqual(['m', 't']);
+});
+
+test('mergeGroups deletes a group only if the other tab left it alone', () => {
+  const base = { x: group(['a']), y: group(['a']) };
+  const changed = { x: group(['a']), y: group(['a', 'b']) };
+  // I deleted both; they changed y.
+  expect(mergeGroups(base, {}, changed).groups).toStrictEqual({
+    y: group(['a', 'b']),
+  });
+  // They deleted both; I changed y.
+  expect(mergeGroups(base, changed, {}).groups).toStrictEqual({
+    y: group(['a', 'b']),
+  });
+  // They deleted both and I changed nothing.
+  expect(mergeGroups(base, base, {}).groups).toStrictEqual({});
+});
+
+test('mergeGroups maps ids merged on Geni and removes duplicates', () => {
+  const base = { g: group(['old']) };
+  const result = mergeGroups(
+    base,
+    { g: group(['old', 'x']) },
+    { g: group(['new']) },
+    (id) => (id === 'old' ? 'new' : id),
+  );
+  expect(result.groups.g.members).toStrictEqual(['new', 'x']);
 });

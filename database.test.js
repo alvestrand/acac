@@ -236,3 +236,66 @@ test('merges are saved and restored', () => {
   db2.fromJsonString(db.toJsonString());
   expect(db2.get('old').id()).toBe('new');
 });
+
+function personDb(...people) {
+  const db = new Database();
+  for (const [id, extra] of people) {
+    db.addWithAttributes(id, { id: 'profile-' + id, name: id, ...extra });
+  }
+  return db;
+}
+
+test('mergeFrom adds persons the database lacks', () => {
+  const db = personDb(['a', {}]);
+  const result = db.mergeFrom(personDb(['a', {}], ['b', {}]));
+  expect(result).toStrictEqual({ added: 1, replaced: 0, kept: 1 });
+  expect(db.get('b').name()).toBe('b');
+});
+
+test('mergeFrom replaces only with a newer updated_at', () => {
+  const db = personDb(['a', { name: 'mine', updated_at: '20' }]);
+  db.mergeFrom(personDb(['a', { name: 'older', updated_at: '10' }]));
+  expect(db.get('a').name()).toBe('mine');
+  const result = db.mergeFrom(
+    personDb(['a', { name: 'newer', updated_at: '30' }]),
+  );
+  expect(result.replaced).toBe(1);
+  expect(db.get('a').name()).toBe('newer');
+});
+
+test('mergeFrom keeps parent links found in only one record', () => {
+  const db = personDb(['a', { father: 'f' }], ['f', {}]);
+  const other = personDb(['a', { mother: 'm' }], ['m', {}]);
+  other.get('a').parents = ['https://example.com/profile-f'];
+  db.mergeFrom(other);
+  expect(db.get('a').father()).toBe('f');
+  expect(db.get('a').mother()).toBe('m');
+  expect(db.get('a').parents).toStrictEqual(['https://example.com/profile-f']);
+});
+
+test('mergeFrom applies Geni merges recorded by the other database', () => {
+  const db = personDb(['old', {}], ['new', {}], ['child', { father: 'old' }]);
+  const other = personDb(['new', {}], ['child', { father: 'new' }]);
+  other.merge('old', 'new');
+  db.mergeFrom(other);
+  expect(db.get('old').id()).toBe('new');
+  expect(db.size()).toBe(2);
+  expect(db.get('child').father()).toBe('new');
+});
+
+test('mergeFrom leaves out persons merged away in the database', () => {
+  const db = personDb(['new', {}]);
+  db.merge('old', 'new');
+  db.mergeFrom(personDb(['old', {}], ['kid', { father: 'old' }]));
+  expect(db.size()).toBe(2);
+  expect(db.get('kid').father()).toBe('new');
+});
+
+test('mergeFrom combines markers', () => {
+  const db = personDb(['a', {}]);
+  db.get('a').markers.add('one');
+  const other = personDb(['a', {}]);
+  other.get('a').markers.add('two');
+  db.mergeFrom(other);
+  expect([...db.get('a').markers].sort()).toStrictEqual(['one', 'two']);
+});
