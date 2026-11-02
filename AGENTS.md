@@ -35,7 +35,16 @@ existing responsibility; put display calculations in
 descriptive camelCase names for functions and variables, and
 `*.test.js` for tests. There is no JavaScript formatter or linter
 linting configured. Before committing, run Prettier on every modified
-JavaScript file and `mdformat` on every modified `.md` file.
+JavaScript file and `mdformat` on every modified `.md` file. Then use
+pandoc to make an HTML file next to every `.md` file in `doc/`, and
+commit the changed HTML files with the Markdown:
+
+```sh
+for f in doc/*.md; do
+  pandoc --standalone --metadata pagetitle="$(basename "$f" .md)" \
+    "$f" -o "${f%.md}.html"
+done
+```
 
 ## Testing Guidelines
 

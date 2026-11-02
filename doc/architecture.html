@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc 3.11" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>architecture</title>
+  <style>
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    html {
+      color: #1a1a1a;
+      background-color: #fdfdfd;
+    }
+    body {
+      margin: 0 auto;
+      max-width: 36em;
+      padding-left: 50px;
+      padding-right: 50px;
+      padding-top: 50px;
+      padding-bottom: 50px;
+      hyphens: auto;
+      overflow-wrap: break-word;
+      text-rendering: optimizeLegibility;
+      font-kerning: normal;
+    }
+    @media (max-width: 600px) {
+      body {
+        font-size: 0.9em;
+        padding: 12px;
+      }
+      h1 {
+        font-size: 1.8em;
+      }
+    }
+    @media print {
+      html {
+        background-color: white;
+      }
+      body {
+        background-color: transparent;
+        color: black;
+      }
+      p, h2, h3 {
+        orphans: 3;
+        widows: 3;
+      }
+      h2, h3, h4 {
+        page-break-after: avoid;
+      }
+    }
+    p {
+      margin: 1em 0;
+    }
+    a {
+      color: #1a1a1a;
+    }
+    a:visited {
+      color: #1a1a1a;
+    }
+    img {
+      max-width: 100%;
+    }
+    svg {
+      height: auto;
+      max-width: 100%;
+    }
+    h1, h2, h3, h4, h5, h6 {
+      margin-top: 1.4em;
+    }
+    h5, h6 {
+      font-size: 1em;
+      font-style: italic;
+    }
+    h6 {
+      font-weight: normal;
+    }
+    ol, ul {
+      padding-left: 1.7em;
+      margin-top: 1em;
+    }
+    li > ol, li > ul {
+      margin-top: 0;
+    }
+    blockquote {
+      margin: 1em 0 1em 1.7em;
+      padding-left: 1em;
+      border-left: 2px solid #e6e6e6;
+      color: #606060;
+    }
+    code {
+      white-space: pre-wrap;
+      font-family: Menlo, Monaco, Consolas, 'Lucida Console', monospace;
+      font-size: 85%;
+      margin: 0;
+      hyphens: manual;
+    }
+    pre {
+      margin: 1em 0;
+      overflow: auto;
+    }
+    pre code {
+      padding: 0;
+      overflow: visible;
+      overflow-wrap: normal;
+    }
+    .sourceCode {
+     background-color: transparent;
+     overflow: visible;
+    }
+    hr {
+      border: none;
+      border-top: 1px solid #1a1a1a;
+      height: 1px;
+      margin: 1em 0;
+    }
+    table {
+      margin: 1em 0;
+      border-collapse: collapse;
+      width: 100%;
+      overflow-x: auto;
+      display: block;
+      font-variant-numeric: lining-nums tabular-nums;
+    }
+    table caption {
+      margin-bottom: 0.75em;
+    }
+    tbody {
+      margin-top: 0.5em;
+      border-top: 1px solid #1a1a1a;
+      border-bottom: 1px solid #1a1a1a;
+    }
+    th {
+      border-top: 1px solid #1a1a1a;
+      padding: 0.25em 0.5em 0.25em 0.5em;
+    }
+    td {
+      padding: 0.125em 0.5em 0.25em 0.5em;
+    }
+    header {
+      margin-bottom: 4em;
+      text-align: center;
+    }
+    #TOC li {
+      list-style: none;
+    }
+    #TOC ul {
+      padding-left: 1.3em;
+    }
+    #TOC > ul {
+      padding-left: 0;
+    }
+    #TOC a:not(:hover) {
+      text-decoration: none;
+    }
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: 1.5em;}
+    div.column{flex: auto;}
+    @media screen {
+    div.columns{gap: min(4vw, 1.5em);}
+    div.column{overflow-x: auto;}
+    }
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+  </style>
+</head>
+<body>
+<h1 id="acac-architecture">ACAC Architecture</h1>
+<p>ACAC is a browser-only app that uses the Geni API to find common
+ancestors for a group of profiles. The browser fetches data with the
+user’s Geni login and stores the local cache in the Origin Private File
+System. There is no application server.</p>
+<h2 id="main-data-flow">Main Data Flow</h2>
+<p><code>index.js</code> owns page state and DOM construction: profile
+and group actions, tree-building controls, import/export, and status
+messages. <code>TreeBuilder</code> fetches profiles, unions, and parents
+through an injected Geni client, stores profiles in the database, and
+follows merges. After fetching, <code>Database.createAncestors()</code>
+rebuilds ancestor sets and generation distances;
+<code>ancestor_finder.js</code> uses those to group profiles.
+<code>display_functions.js</code> computes display values without
+touching the DOM, so those calculations can be tested separately.</p>
+<h2 id="module-responsibilities">Module Responsibilities</h2>
+<ul>
+<li><code>async_geni.js</code>: <code>GeniClient</code> serializes API
+operations through one queue, retries Geni rate-limit responses after
+five seconds, and supports stopping and restarting fetches.</li>
+<li><code>tree_builder.js</code>: <code>TreeBuilder</code> fetches
+profiles to add, builds ancestors to a year or generation limit, and
+refreshes trees through a shared pool so shared ancestors are refreshed
+once. It follows <code>merged_into</code>, records merges, and reports
+unexpected API answers through hooks. Path results are imported by
+profile API URL; their union data, rather than the path’s relation
+labels, establishes parent links.</li>
+<li><code>database.js</code>: <code>Person</code> and
+<code>Database</code> hold records and derived ancestor data. Profile
+records are keyed by Geni GUID; <code>getByIdAttribute</code> maps
+Geni’s <code>profile-&lt;id&gt;</code> identifiers to GUIDs.
+<code>father()</code> and <code>mother()</code> contain GUIDs.
+<code>parents</code> contains API URLs, with <code>undefined</code>
+meaning not fetched and <code>[]</code> meaning no known parents. Merges
+retain aliases so older references still resolve.</li>
+<li><code>geni_structures.js</code>: API structure helpers, including
+<code>resolveParents</code>, <code>isolateId</code>, and
+<code>profileFields</code>. A field used by the app must be added to
+<code>profileFields</code>; the fake client filters profile data using
+that list too.</li>
+<li><code>ancestor_finder.js</code>: grouping algorithms based on shared
+ancestors, kinship scores, closest ancestors, completeness, or root
+descendants. The selected profile groups and their display contents are
+built in <code>index.js</code> using
+<code>display_functions.js</code>.</li>
+<li><code>groups.js</code>: group membership, notes, and profiles
+excluded from matching, stored in localStorage.</li>
+<li><code>file_export.js</code>: whole-database and group export/import.
+When merging records, newer Geni <code>updated_at</code> data replaces
+older attributes while parent links from either record are
+retained.</li>
+<li><code>opfsdb.js</code>: persistence of the profile database in the
+Origin Private File System.</li>
+<li><code>fake_geni_client.js</code>: an in-memory Geni API fake used by
+<code>tree_builder.test.js</code>.</li>
+<li><code>tools/count_groups.js</code>: manually compares grouping
+algorithms on a saved database.</li>
+</ul>
+<h2 id="tree-building-and-path-search">Tree Building and Path
+Search</h2>
+<p>Ordinary tree building follows parent links only while profiles meet
+the UI’s year limit; known profiles are not fetched again. The
+per-profile path action searches from the selected profile to each other
+profile in the group. Geni path results include both endpoints in
+<code>relations</code>, a <code>step_count</code>,
+<code>relationship</code>, and a <code>status</code>. ACAC reports
+counts for <code>done</code>, <code>pending</code>,
+<code>overloaded</code>, and <code>not found</code>; it does not retry
+pending responses.</p>
+<p>Paths longer than the configured length limit are discarded whole.
+For accepted paths, ACAC fetches relation profiles using their API URLs,
+stores them by GUID, and fetches unions to resolve parents. Profiles
+fetched for this path expansion with a known birth year earlier than the
+configured age limit are not added to the database. Missing birth years
+do not fail that cutoff. The completion message reports discarded paths
+and unique discarded profile IDs. New profile additions are saved when
+the Geni request queue transitions from non-empty to empty, after a
+short delay for response handlers to finish.</p>
+<h2 id="geni-api-findings">Geni API Findings</h2>
+<p>These findings come from API experiments and should be rechecked if
+Geni behavior changes:</p>
+<ul>
+<li><code>profile/ancestors</code> works only for the logged-in user’s
+own profile; other profiles return permission denied. Its
+<code>generations</code> parameter has failed with both numeric and
+string values, so tree building uses profile and union requests
+instead.</li>
+<li><code>fields=</code> selects profile fields, and requesting nested
+<code>birth</code> returns <code>birth.date.year</code>. Profile records
+include <code>updated_at</code> as an epoch-seconds string and
+<code>profile_url</code> for browser links.</li>
+<li>A merged profile is expected to return <code>merged_into</code> as a
+profile API URL; the client follows that pointer. Unexpected profile
+answers stop fetching for inspection.</li>
+<li><code>profile?ids=a,b,c</code> and <code>/union</code> with
+<code>{ids: [...]}</code> support batching; the maximum batch size has
+not been established.</li>
+<li>Rate-limit responses include <code>X-API-Rate-Limit</code>,
+<code>X-API-Rate-Remaining</code>, and <code>X-API-Rate-Window</code>.
+Parallel requests do not improve throughput.</li>
+<li><code>profile/path-to</code> returns ordered relation entries with
+names and profile API URLs; sample responses also include
+<code>step_count</code>. A relation’s label such as <code>brother</code>
+or <code>son</code> is not sufficient to infer parent links, so ACAC
+uses unions.</li>
+</ul>
+<h2 id="known-issues-and-limits">Known Issues and Limits</h2>
+<ul>
+<li><code>index.js</code> has no automated UI tests. Test UI changes in
+a browser when possible; API behavior can be inspected with
+<code>testpage.html</code>.</li>
+</ul>
+</body>
+</html>

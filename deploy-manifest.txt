@@ -13,6 +13,7 @@ opfsdb.js
 tree_builder.js
 privacy.html
 doc/index.html
+doc/myheritage-find-profiles.html
 doc/acac-result-expanded.png
 doc/acac-result.png
 doc/arne-profile-url.png
