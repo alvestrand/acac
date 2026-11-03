@@ -58,7 +58,8 @@ function parseExport(data) {
 }
 
 // Replace the contents of the database and all groups in the GroupStore
-// with the result of parseExport. Returns the name of the current group.
+// with the result of parseExport. Returns the name of the current group
+// to select.
 // Files from older versions may have person records instead of ids
 // in the groups; these are converted to ids.
 function applyImport(imported, db, groupStore) {
@@ -72,9 +73,7 @@ function applyImport(imported, db, groupStore) {
     groupStore.saveExcluded(name, imported.excluded?.[name] ?? []);
     groupStore.saveNotes(name, imported.groupNotes?.[name] ?? '');
   }
-  const currentGroup = imported.currentGroup ?? '';
-  groupStore.setCurrentName(currentGroup);
-  return currentGroup;
+  return imported.currentGroup ?? '';
 }
 
 // A single group can also be saved to its own file, so that work on it
@@ -142,19 +141,10 @@ function parseGroupExport(data) {
   return imported;
 }
 
-// Convert Geni's updated_at attribute (seconds since the epoch, as a
-// string) to a number. Records without a usable timestamp count as oldest.
-function timestamp(updatedAt) {
-  return Number(updatedAt) || 0;
-}
-
 // Merge the persons from parseGroupExport into the database.
-// A person already in the database is replaced only if the record
-// in the file has a newer timestamp; otherwise the database record is kept.
-// Parent links are not covered by Geni's timestamp, so links found
-// in only one of the two records are kept either way.
-// Persons known to be merged into others on Geni are left out, and ids
-// in the file are changed to the ids those persons were merged into.
+// Persons are merged by Database.mergeRecord. Persons known to be merged
+// into others on Geni are left out, and ids in the file are changed to
+// the ids those persons were merged into.
 // Returns the member ids in group order, the ids of the members excluded
 // from matching, and how many persons were added, replaced and kept.
 function mergeGroupImport(imported, db) {
@@ -170,41 +160,9 @@ function mergeGroupImport(imported, db) {
     kept: 0,
   };
   for (const original of imported.persons) {
-    if (db.isMerged(original.id)) {
-      result.kept++;
-      continue;
-    }
-    const record = { ...original, attributes: { ...original.attributes } };
-    for (const link of ['father', 'mother']) {
-      if (record.attributes[link]) {
-        record.attributes[link] = db.currentId(record.attributes[link]);
-      }
-    }
-    const existing = db.get(record.id);
-    if (!existing) {
-      const person = db.addWithAttributes(record.id, record.attributes);
-      person.parents = record.parents;
-      result.added++;
-    } else if (
-      timestamp(record.attributes.updated_at) >
-      timestamp(existing.attribute('updated_at'))
-    ) {
-      const attributes = { ...record.attributes };
-      attributes.father ??= existing.father();
-      attributes.mother ??= existing.mother();
-      const person = db.addWithAttributes(record.id, attributes);
-      person.parents = record.parents ?? existing.parents;
-      result.replaced++;
-    } else {
-      if (!existing.father() && record.attributes.father) {
-        existing.setFather(record.attributes.father);
-      }
-      if (!existing.mother() && record.attributes.mother) {
-        existing.setMother(record.attributes.mother);
-      }
-      existing.parents ??= record.parents;
-      result.kept++;
-    }
+    result[
+      db.mergeRecord(original.id, original.attributes, original.parents)
+    ]++;
   }
   return result;
 }
