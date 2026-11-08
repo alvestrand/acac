@@ -919,6 +919,8 @@ function buildAncestorGroups() {
 function displayAncestorGroups() {
   const list = document.createElement('div');
   const memberIds = new Set(currentProfileIds());
+  // Shared by all paths shown, so that ancestors are counted once.
+  const knownAncestorsMemo = new Map();
 
   display.groupListEntries(ancestorGroups, db).forEach((entry, entryIndex) => {
     if (entryIndex > 0) {
@@ -982,6 +984,19 @@ function displayAncestorGroups() {
               if (personIndex > 0) item.append(' → ');
               item.append(pathNameLink(person, memberIds));
             });
+            const generation = path.length + 1;
+            item.append(
+              ' (' +
+                display.ancestorFraction(
+                  db.knownAncestorsAtGeneration(
+                    member.id(),
+                    generation,
+                    knownAncestorsMemo,
+                  ),
+                  generation,
+                ) +
+                ')',
+            );
           });
         }
         pathList.append(item);

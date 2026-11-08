@@ -433,6 +433,37 @@ class Database {
     memo.set(id, index);
     return index;
   }
+  // The number of known ancestor positions of the person id, generation
+  // generations back (2 ** generation positions in all), from the parent
+  // links. A person appearing in several positions counts once in each.
+  // memo maps 'id/generation' to counts already worked out.
+  knownAncestorsAtGeneration(id, generation, memo = new Map()) {
+    const person = this.get(id);
+    if (!person) {
+      return 0;
+    }
+    if (generation === 0) {
+      return 1;
+    }
+    const key = id + '/' + generation;
+    if (memo.has(key)) {
+      return memo.get(key);
+    }
+    // Guard against loops in the parent links.
+    memo.set(key, 0);
+    let count = 0;
+    for (const parentId of [person.father(), person.mother()]) {
+      if (parentId) {
+        count += this.knownAncestorsAtGeneration(
+          parentId,
+          generation - 1,
+          memo,
+        );
+      }
+    }
+    memo.set(key, count);
+    return count;
+  }
   // Build the ancestor sets of all entries from the current parent links.
   // Sets built earlier are rebuilt, since links may have been added since.
   createAncestors() {

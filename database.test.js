@@ -150,6 +150,33 @@ test('Completeness index ignores links to persons not in the database', () => {
   expect(db.completenessIndex('c')).toBe(0);
 });
 
+test('knownAncestorsAtGeneration counts known positions', () => {
+  const db = new Database();
+  db.addWithAttributes('gf', { name: 'Grandfather' });
+  db.addWithAttributes('gm', { name: 'Grandmother' });
+  db.addWithAttributes('f', { name: 'Father', father: 'gf', mother: 'gm' });
+  db.addWithAttributes('m', { name: 'Mother', father: 'missing' });
+  db.addWithAttributes('c', { name: 'Child', father: 'f', mother: 'm' });
+  expect(db.knownAncestorsAtGeneration('c', 0)).toBe(1);
+  expect(db.knownAncestorsAtGeneration('c', 1)).toBe(2);
+  // The mother's father is not in the database.
+  expect(db.knownAncestorsAtGeneration('c', 2)).toBe(2);
+  expect(db.knownAncestorsAtGeneration('c', 3)).toBe(0);
+  expect(db.knownAncestorsAtGeneration('nobody', 1)).toBe(0);
+});
+
+test('knownAncestorsAtGeneration counts a shared ancestor in each position', () => {
+  const db = new Database();
+  // The parents are half-siblings with the same father.
+  db.addWithAttributes('a', { name: 'Shared' });
+  db.addWithAttributes('f', { name: 'Father', father: 'a' });
+  db.addWithAttributes('m', { name: 'Mother', father: 'a' });
+  db.addWithAttributes('c', { name: 'Child', father: 'f', mother: 'm' });
+  const memo = new Map();
+  expect(db.knownAncestorsAtGeneration('c', 2, memo)).toBe(2);
+  expect(memo.get('c/2')).toBe(2);
+});
+
 test('updateAttributes replaces the record but keeps the object and links', () => {
   const db = new Database();
   const person = db.addWithAttributes('g1', {

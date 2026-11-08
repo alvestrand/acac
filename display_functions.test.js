@@ -5,6 +5,7 @@ import {
   hidesName,
   displayName,
   formatCompleteness,
+  ancestorFraction,
   sortProfiles,
   nextSortState,
   sortIndicator,
@@ -59,6 +60,11 @@ test('displayName keeps the names of public members', () => {
   expect(hidesName(db.get('a'), true, members)).toBe(false);
   expect(hidesName(db.get('b'), true, members)).toBe(true);
   expect(hidesName(db.get('b'), false, members)).toBe(false);
+});
+
+test('ancestorFraction shows known out of all positions', () => {
+  expect(ancestorFraction(44, 7)).toBe('44/128');
+  expect(ancestorFraction(1, 1)).toBe('1/2');
 });
 
 test('formatCompleteness shows complete generations', () => {
