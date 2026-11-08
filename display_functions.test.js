@@ -2,6 +2,7 @@ import { Database } from './database.js';
 import { groupingAlgorithms } from './ancestor_finder.js';
 import {
   initials,
+  hidesName,
   displayName,
   formatCompleteness,
   sortProfiles,
@@ -45,6 +46,19 @@ test('displayName shows initials only for members, when asked', () => {
   expect(displayName(db.get('a'), true, members)).toBe('A. B.');
   expect(displayName(db.get('f'), true, members)).toBe('Father');
   expect(displayName(db.get('a'), false, members)).toBe('Anna Berg (Dal)');
+});
+
+test('displayName keeps the names of public members', () => {
+  const db = new Database();
+  db.addWithAttributes('a', { name: 'Anna Berg (Dal)', public: true });
+  db.addWithAttributes('b', { name: 'Bjørn Berg', public: false });
+  db.createAncestors();
+  const members = new Set(['a', 'b']);
+  expect(displayName(db.get('a'), true, members)).toBe('Anna Berg (Dal)');
+  expect(displayName(db.get('b'), true, members)).toBe('B. B.');
+  expect(hidesName(db.get('a'), true, members)).toBe(false);
+  expect(hidesName(db.get('b'), true, members)).toBe(true);
+  expect(hidesName(db.get('b'), false, members)).toBe(false);
 });
 
 test('formatCompleteness shows complete generations', () => {

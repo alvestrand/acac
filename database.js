@@ -377,6 +377,13 @@ class Database {
       this.#mergedInto.set(oldId, newId);
     }
   }
+  // The persons whose record has no attribute with this name, for
+  // instance profiles fetched before a field was asked for.
+  personsLackingAttribute(name) {
+    return [...this.#persons.values()].filter(
+      (person) => person.attribute(name) === undefined,
+    );
+  }
   // For debugging: Return all records with a specific birth year
   getAllWithBirthYearAndGender(year, gender) {
     let result = [];

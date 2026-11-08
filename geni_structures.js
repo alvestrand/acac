@@ -22,6 +22,7 @@ const profileFields = [
   'unions',
   'updated_at',
   'profile_url',
+  'public',
   'merged_into',
 ];
 

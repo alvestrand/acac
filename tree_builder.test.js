@@ -224,6 +224,60 @@ test('a profile with neither name nor merged_into is a surprise', async () => {
   expect(db.get('g1').father()).toBe('g2');
 });
 
+test('a new profile without a public field is a surprise', async () => {
+  const geni = makeGeni();
+  geni.edit(2, 'public', undefined);
+  const { hooks, builder } = makeBuilder(geni);
+  await addAndBuild(builder, 'g1');
+  expect(hooks.onSurprise).toHaveBeenCalledWith(
+    'a profile has no public field',
+    'g2',
+    expect.objectContaining({ id: 'profile-2' }),
+  );
+  expect(geni.stopped).toBe(true);
+});
+
+test('refetchProfiles replaces partial records and keeps parents', async () => {
+  const geni = makeGeni();
+  const { db, hooks, builder } = makeBuilder(geni);
+  await addAndBuild(builder, 'g1');
+  expect(db.personsLackingAttribute('public')).toHaveLength(0);
+  // As if profile 1 was fetched without the public field. That is a
+  // surprise, which stops the client.
+  geni.edit(1, 'public', undefined);
+  await builder.rebuild(db.get('g1'), yearLimit);
+  expect(db.personsLackingAttribute('public').map((p) => p.id())).toEqual([
+    'g1',
+  ]);
+  hooks.onSurprise.mockClear();
+  geni.start();
+  geni.edit(1, 'public', false);
+  const count = await builder.refetchProfiles(
+    db.personsLackingAttribute('public'),
+  );
+  expect(count).toBe(1);
+  expect(db.personsLackingAttribute('public')).toHaveLength(0);
+  expect(db.get('g1').attribute('public')).toBe(false);
+  expect(db.get('g1').father()).toBe('g2');
+  expect(hooks.onSurprise).not.toHaveBeenCalled();
+});
+
+test('a refetched profile without a public field is a surprise', async () => {
+  const geni = makeGeni();
+  const { db, hooks, builder } = makeBuilder(geni);
+  await addAndBuild(builder, 'g1');
+  expect(hooks.onSurprise).not.toHaveBeenCalled();
+  geni.edit(2, 'public', undefined);
+  const count = await builder.refetchProfiles([db.get('g2')]);
+  expect(hooks.onSurprise).toHaveBeenCalledWith(
+    'a profile has no public field',
+    'g2',
+    expect.objectContaining({ id: 'profile-2' }),
+  );
+  expect(geni.stopped).toBe(true);
+  expect(count).toBe(1);
+});
+
 test('rebuild uses a gender corrected on Geni', async () => {
   const geni = makeGeni();
   const { db, hooks, builder } = makeBuilder(geni);

@@ -196,6 +196,9 @@ const yearLimitElement = document.getElementById('year-limit');
 const pathAgeLimitElement = document.getElementById('path-age-limit');
 const pathLengthLimitElement = document.getElementById('path-length-limit');
 const recalculateGroupsButton = document.getElementById('recalculate-groups');
+const updatePartialProfilesButton = document.getElementById(
+  'update-partial-profiles',
+);
 const groupListElement = document.getElementById('group-list');
 const algorithmSelectElement = document.getElementById('algorithm-select');
 const displayPathElement = document.getElementById('display-path');
@@ -317,7 +320,8 @@ function profileLink(person) {
 }
 
 // A short path label. The full name is available on hover, while member
-// names still respect the initials-only setting used for screenshots.
+// names still respect the initials-only setting used for screenshots
+// (public profiles excepted).
 function pathNameLink(person, memberIds) {
   const link = document.createElement('a');
   link.href =
@@ -325,22 +329,34 @@ function pathNameLink(person, memberIds) {
     'https://www.geni.com/people/profile/' + person.guid();
   link.target = '_blank';
   link.rel = 'noopener';
-  const isMember = memberIds.has(person.id());
   const firstName = (person.name() ?? '')
     .replace(/\s*\([^)]*\)/g, '')
     .trim()
     .split(/\s+/)[0];
-  link.textContent =
-    initialsOnlyElement.checked && isMember
-      ? display.displayName(person, true, memberIds)
-      : firstName || person.id();
-  link.title = person.name() ?? '';
+  const hidden = display.hidesName(
+    person,
+    initialsOnlyElement.checked,
+    memberIds,
+  );
+  link.textContent = hidden
+    ? display.displayName(person, true, memberIds)
+    : firstName || person.id();
+  link.title = hidden ? '' : (person.name() ?? '');
   return link;
 }
 
 function fullNameProfileLink(person) {
+  // profileLink already shows initials for hidden members.
   const link = profileLink(person);
-  link.textContent = person.name() ?? '';
+  if (
+    !display.hidesName(
+      person,
+      initialsOnlyElement.checked,
+      new Set(currentProfileIds()),
+    )
+  ) {
+    link.textContent = person.name() ?? '';
+  }
   return link;
 }
 
@@ -676,6 +692,7 @@ let treeBuildsRunning = 0;
 function startTreeBuild() {
   treeBuildsRunning++;
   buildTreeButton.disabled = true;
+  updatePartialProfilesButton.disabled = true;
   client.start();
 }
 
@@ -683,6 +700,7 @@ function finishTreeBuild() {
   treeBuildsRunning--;
   if (treeBuildsRunning === 0) {
     buildTreeButton.disabled = false;
+    updatePartialProfilesButton.disabled = false;
   }
 }
 
@@ -753,6 +771,33 @@ async function rebuildTree(person) {
     console.log('Rebuilding tree failed, message ', error);
     addProfileMessage.innerText =
       'Rebuilding tree failed, error ' +
+      (error?.message ?? JSON.stringify(error));
+  } finally {
+    finishTreeBuild();
+  }
+}
+
+// Fetch again every profile in the database that has no "public" field,
+// such as those fetched before the field was asked for.
+async function updatePartialProfiles() {
+  const partial = db.personsLackingAttribute('public');
+  if (partial.length === 0) {
+    addProfileMessage.innerText = 'Database already OK';
+    return;
+  }
+  startTreeBuild();
+  try {
+    if (!client.connected) {
+      await connectToGeni();
+    }
+    addProfileMessage.innerText = `Refetching ${partial.length} profiles`;
+    const refreshed = await treeBuilder.refetchProfiles(partial);
+    buildAncestorGroups();
+    addProfileMessage.innerText = `Refreshed ${refreshed} profiles`;
+  } catch (error) {
+    console.log('Updating partial profiles failed, message ', error);
+    addProfileMessage.innerText =
+      'Updating partial profiles failed, error ' +
       (error?.message ?? JSON.stringify(error));
   } finally {
     finishTreeBuild();
@@ -903,19 +948,6 @@ function displayAncestorGroups() {
           display.pathsToAncestor(db, member, ancestor),
         ),
       );
-      const sharedPathIds = new Set();
-      const pathCounts = new Map();
-      pathsByMember.forEach((paths) => {
-        paths.forEach((path) => {
-          path.slice(1, -1).forEach((person) => {
-            pathCounts.set(person.id(), (pathCounts.get(person.id()) ?? 0) + 1);
-          });
-        });
-      });
-      pathCounts.forEach((count, id) => {
-        if (count > 1) sharedPathIds.add(id);
-      });
-
       const section = document.createElement('section');
       section.className = 'common-ancestor-group';
       appendAncestorHeading(section, ancestorGroup);
@@ -948,12 +980,7 @@ function displayAncestorGroups() {
             }
             path.forEach((person, personIndex) => {
               if (personIndex > 0) item.append(' → ');
-              const name = pathNameLink(person, memberIds);
-              if (sharedPathIds.has(person.id())) {
-                name.classList.add('shared-path-person');
-                name.title += ' (on multiple paths)';
-              }
-              item.append(name);
+              item.append(pathNameLink(person, memberIds));
             });
           });
         }
@@ -976,9 +1003,8 @@ function appendAncestorHeading(section, ancestorGroup) {
     if (ancestor.birth() !== undefined) {
       heading.append(' (' + ancestor.birth() + ')');
     }
+    heading.append(' ', ancestorCount(ancestor));
   });
-  heading.append(' ');
-  heading.append(ancestorCount(ancestorGroup.ancestors[0]));
   section.append(heading);
 }
 
@@ -1198,6 +1224,11 @@ stopFetchingButton.addEventListener('click', () => {
 recalculateGroupsButton.addEventListener('click', () => {
   startUserOperation();
   buildAncestorGroups();
+});
+
+updatePartialProfilesButton.addEventListener('click', () => {
+  startUserOperation();
+  updatePartialProfiles();
 });
 
 initialsOnlyElement.addEventListener('change', () => {
