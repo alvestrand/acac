@@ -41,6 +41,12 @@ function displayName(person, initialsOnly, memberIds) {
   return person.name();
 }
 
+// Known ancestor positions out of all, generation generations back,
+// such as '44/128'.
+function ancestorFraction(known, generation) {
+  return `${known}/${2 ** generation}`;
+}
+
 // The profile list ================================================
 
 // The completeness index as shown in the profile list: -log2(1 - index),
@@ -297,6 +303,7 @@ export {
   hidesName,
   displayName,
   formatCompleteness,
+  ancestorFraction,
   sortProfiles,
   nextSortState,
   sortIndicator,
