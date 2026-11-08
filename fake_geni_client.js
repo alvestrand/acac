@@ -34,6 +34,7 @@ class FakeGeniClient {
       name,
       gender,
       unions: [],
+      public: true,
       ...attributes,
     };
     if (birthYear !== undefined) {

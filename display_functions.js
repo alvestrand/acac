@@ -18,12 +18,24 @@ function initials(name) {
     .join(' ');
 }
 
+// Whether the name of person is hidden behind initials: only with
+// initialsOnly, only for the persons in memberIds (the profiles in the
+// group), and not when Geni says the profile is public. A profile
+// without a "public" field counts as not public.
+function hidesName(person, initialsOnly, memberIds) {
+  return (
+    initialsOnly &&
+    memberIds.has(person.id()) &&
+    person.attribute('public') !== true
+  );
+}
+
 // The name of person as shown on the page. With initialsOnly, the
-// persons in memberIds (the profiles in the group) are shown by their
-// initials, so that a screenshot can be shared without showing who the
-// matches are. Ancestors keep their names.
+// non-public persons in memberIds are shown by their initials, so that
+// a screenshot can be shared without showing who the matches are.
+// Ancestors and public profiles keep their names.
 function displayName(person, initialsOnly, memberIds) {
-  if (initialsOnly && memberIds.has(person.id())) {
+  if (hidesName(person, initialsOnly, memberIds)) {
     return initials(person.name());
   }
   return person.name();
@@ -282,6 +294,7 @@ function groupFileName(groupName, date) {
 
 export {
   initials,
+  hidesName,
   displayName,
   formatCompleteness,
   sortProfiles,

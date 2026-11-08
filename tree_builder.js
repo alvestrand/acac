@@ -77,7 +77,22 @@ class TreeBuilder {
   }
 
   // Follow merged_into pointers from a fetched profile to the current one.
+  // Every fetched profile passes through here, so this is also where a
+  // profile without the public field is noticed. Empty answers (not
+  // found) are left alone.
   async #followMerges(profile) {
+    profile = await this.#followMergeChain(profile);
+    if ('guid' in profile && !('public' in profile)) {
+      this.#surprise(
+        'a profile has no public field',
+        String(profile.guid),
+        profile,
+      );
+    }
+    return profile;
+  }
+
+  async #followMergeChain(profile) {
     const first = profile;
     for (let i = 0; i < maxMergeSteps && 'merged_into' in profile; i++) {
       console.log('Following merged-to pointer', profile.merged_into);
@@ -451,6 +466,19 @@ class TreeBuilder {
         onProfileDiscard,
       );
     }
+  }
+
+  // Fetch the profile of each of persons from Geni again and replace the
+  // stored records, keeping the parent links. Parents are not followed.
+  // The fetches are queued in the client together. Returns the number of
+  // profiles refreshed, which is less than the number asked for if a
+  // fetch fails or the client is stopped.
+  async refetchProfiles(persons) {
+    const fetched = new Set();
+    await Promise.all(
+      persons.map((person) => this.#refetchProfile(person, fetched)),
+    );
+    return fetched.size;
   }
 
   // Fetch person and all ancestors back to yearLimit again, to pick up
