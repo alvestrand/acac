@@ -188,6 +188,44 @@ function pathsToAncestor(db, member, ancestor) {
   return paths;
 }
 
+// The descendants of ancestors (one person or a couple) that lead to
+// members, as a tree with the ancestors' children at the top. Each node
+// is { person, isMember, children }; the end of every path is a member
+// node. A person reached by several paths, such as a member descended
+// from the couple through two children, gets a node on each, so that
+// the result is a tree. Members with no known path are listed in
+// unconnected.
+function descendantTree(db, members, ancestors) {
+  const roots = [];
+  const unconnected = [];
+  members.forEach((member) => {
+    const paths = ancestors.flatMap((ancestor) =>
+      pathsToAncestor(db, member, ancestor),
+    );
+    if (paths.length === 0) {
+      unconnected.push(member);
+      return;
+    }
+    paths.forEach((path) => {
+      // From the ancestor's child down to the member.
+      const descendants = path.slice(0, -1).reverse();
+      let level = roots;
+      descendants.forEach((person, index) => {
+        let node = level.find((known) => known.person.id() === person.id());
+        if (!node) {
+          node = { person, isMember: false, children: [] };
+          level.push(node);
+        }
+        if (index === descendants.length - 1) {
+          node.isMember = true;
+        }
+        level = node.children;
+      });
+    });
+  });
+  return { roots, unconnected };
+}
+
 // The cached tree does not retain union records, so treat two common
 // ancestors as a couple when they are recorded as the parents of a known
 // descendant of this group.
@@ -312,6 +350,7 @@ export {
   ungroupedIds,
   groupListEntries,
   pathsToAncestor,
+  descendantTree,
   displayedAncestorGroups,
   algorithmLabel,
   treeBuildingResult,

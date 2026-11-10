@@ -313,6 +313,10 @@ const initialsOnlyKey = 'initialsOnly';
 // under this key.
 const groupingYearLimitKey = 'groupingYearLimit';
 
+// The "Show" choice (no path, path or tree) is remembered in
+// localStorage under this key.
+const displayPathKey = 'displayPath';
+
 // The name of person as shown on the page (see display.displayName).
 function displayName(person) {
   return display.displayName(
@@ -950,7 +954,15 @@ function displayAncestorGroups() {
       list.append(document.createElement('hr'));
     }
     const ancestorGroupsForDisplay = display.displayedAncestorGroups(entry, db);
-    if (!displayPathElement.checked) {
+    if (displayPathElement.value === 'tree') {
+      ancestorGroupsForDisplay.forEach((ancestorGroup) => {
+        list.append(
+          descendantTreeSection(entry, ancestorGroup, knownAncestorsMemo),
+        );
+      });
+      return;
+    }
+    if (displayPathElement.value !== 'path') {
       const section = document.createElement('section');
       section.className = 'common-ancestor-group';
       ancestorGroupsForDisplay.forEach((ancestorGroup) => {
@@ -1031,6 +1043,77 @@ function displayAncestorGroups() {
 
   groupListElement.innerHTML = '';
   groupListElement.appendChild(list);
+}
+
+// A section with the heading of ancestorGroup and, below it, the tree of
+// descendants leading to the members of entry. A member reached by
+// several paths is shown on each. memo is as for
+// db.knownAncestorsAtGeneration.
+function descendantTreeSection(entry, ancestorGroup, memo) {
+  const section = document.createElement('section');
+  section.className = 'common-ancestor-group';
+  appendAncestorHeading(section, ancestorGroup);
+  const memberIds = new Set(currentProfileIds());
+  const { roots, unconnected } = display.descendantTree(
+    db,
+    entry.members,
+    ancestorGroup.ancestors,
+  );
+  section.append(descendantTreeList(roots, 1, memberIds, memo));
+  if (unconnected.length > 0) {
+    const missing = document.createElement('p');
+    missing.textContent =
+      'Path unavailable: ' + unconnected.map(displayName).join(', ');
+    section.append(missing);
+  }
+  return section;
+}
+
+// A nested list of tree nodes, generation generations below the
+// ancestors. A line of single descendants is kept on one line, joined
+// by arrows, to save space. Members are shown with the known ancestors
+// at their generation, as on the paths.
+function descendantTreeList(nodes, generation, memberIds, memo) {
+  const list = document.createElement('ul');
+  list.className = 'descendant-tree';
+  nodes.forEach((node) => {
+    const item = document.createElement('li');
+    let gen = generation;
+    appendTreeName(item, node, gen, memberIds, memo);
+    while (node.children.length === 1) {
+      node = node.children[0];
+      gen++;
+      item.append(' → ');
+      appendTreeName(item, node, gen, memberIds, memo);
+    }
+    if (node.children.length > 0) {
+      item.append(descendantTreeList(node.children, gen + 1, memberIds, memo));
+    }
+    list.append(item);
+  });
+  return list;
+}
+
+// Append the name of a tree node to item: a member in bold, without a
+// link (the profile list links to it), with the known ancestors at
+// generation; others as on the paths.
+function appendTreeName(item, node, generation, memberIds, memo) {
+  if (!node.isMember) {
+    item.append(pathNameLink(node.person, memberIds));
+    return;
+  }
+  const name = document.createElement('span');
+  name.className = 'tree-member';
+  name.textContent = displayName(node.person);
+  item.append(
+    name,
+    ' (' +
+      display.ancestorFraction(
+        db.knownAncestorsAtGeneration(node.person.id(), generation, memo),
+        generation,
+      ) +
+      ')',
+  );
 }
 
 function appendAncestorHeading(section, ancestorGroup) {
@@ -1289,6 +1372,7 @@ groupingYearLimitElement.addEventListener('input', () => {
 });
 
 displayPathElement.addEventListener('change', () => {
+  localStorage.setItem(displayPathKey, displayPathElement.value);
   displayAncestorGroups();
 });
 
@@ -1310,6 +1394,15 @@ if (
 ) {
   groupingYearLimitElement.value = storedGroupingYearLimit;
   groupingYearLimitValueElement.textContent = groupingYearLimitElement.value;
+}
+const storedDisplayPath = localStorage.getItem(displayPathKey);
+// Ignore a stored value that is no longer one of the choices.
+if (
+  [...displayPathElement.options].some(
+    (option) => option.value === storedDisplayPath,
+  )
+) {
+  displayPathElement.value = storedDisplayPath;
 }
 selectGroup(localStorage.getItem(currentGroupKey) ?? '');
 buildAncestorGroups();

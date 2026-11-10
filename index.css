@@ -76,6 +76,52 @@ tr.excluded {
   white-space: nowrap;
 }
 
+/* The descendant tree: nested lists joined by lines. */
+.common-ancestor-group .descendant-tree {
+  list-style: none;
+  margin: 0;
+  padding-left: 0.6em;
+}
+
+.descendant-tree li {
+  position: relative;
+  /* A hanging indent: wrapped lines start 2em further in. */
+  padding-left: 3.2em;
+  text-indent: -2em;
+}
+
+/* Branches start where they did before the hanging indent. */
+.descendant-tree li > .descendant-tree {
+  margin-left: -2em;
+}
+
+/* The lines are drawn by pseudo-elements at the same position, so that
+   they meet exactly at any zoom: a corner to each name, and for all but
+   the last item, a vertical line on to the next one. */
+.descendant-tree li::before,
+.descendant-tree li:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  border-left: 1px solid #888;
+}
+
+.descendant-tree li::before {
+  width: 1em;
+  height: 0.7em;
+  border-bottom: 1px solid #888;
+}
+
+.descendant-tree li:not(:last-child)::after {
+  bottom: 0;
+}
+
+.descendant-tree .tree-member {
+  font-weight: bold;
+  white-space: nowrap;
+}
+
 .group-actions p {
   margin-top: 0;
 }
