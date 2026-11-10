@@ -121,6 +121,19 @@ test('A Geni error rejects the promise', async () => {
   await expect(client.getPerson('1')).rejects.toEqual(error);
 });
 
+test('A Geni callback error is reported to onCallbackError', async () => {
+  apiHandler = (operation, args, callback) => callback(null);
+  const client = new GeniClient('app');
+  client.onCallbackError = jest.fn();
+
+  await expect(client.getPerson('1')).rejects.toThrow();
+
+  expect(client.onCallbackError).toHaveBeenCalledWith(
+    expect.any(TypeError),
+    '/profile-g1',
+  );
+});
+
 test('An exception thrown by Geni.api rejects the promise', async () => {
   apiHandler = () => {
     throw new Error('boom');
