@@ -15,6 +15,9 @@ class Person {
   // Completeness index: 0.25 for each known parent plus a quarter of
   // each parent's index. 1 means a complete tree. Built by addAncestors.
   #completeness;
+  // True while addAncestors works on the parents, to notice loops in the
+  // parent links (someone recorded as their own ancestor).
+  #addingAncestors = false;
   // ID of father and mother entry
   #father;
   #mother;
@@ -114,11 +117,21 @@ class Person {
     this.#personRecord.mother = mother;
   }
   // Build the set of all ancestors from the supplied database.
-  // If it's already built, do nothing.
+  // If it's already built, do nothing. The parent links can have loops,
+  // from errors on Geni: the loop is broken where it is found, and the
+  // person reached again counts as having no further ancestors there.
   addAncestors(db) {
-    if (!this.#ancestors || this.#ancestors === undefined) {
-      let father = db.get(this.#father);
-      let mother = db.get(this.#mother);
+    if (this.#ancestors !== undefined) {
+      return;
+    }
+    if (this.#addingAncestors) {
+      console.log('Loop in the parent links at', this.#id, this.name());
+      return;
+    }
+    this.#addingAncestors = true;
+    try {
+      const father = db.get(this.#father);
+      const mother = db.get(this.#mother);
       if (father) {
         father.addAncestors(db);
       }
@@ -129,7 +142,8 @@ class Person {
       for (const parent of [father, mother]) {
         if (parent) {
           this.#addAncestorGeneration(parent.id(), 1);
-          parent.#ancestorGenerations.forEach((generations, id) => {
+          // Not built if the parent is in a loop that is being worked on.
+          parent.#ancestorGenerations?.forEach((generations, id) => {
             this.#addAncestorGeneration(id, generations + 1);
           });
         }
@@ -138,13 +152,19 @@ class Person {
       this.#completeness = 0;
       for (const parent of [father, mother]) {
         if (parent) {
-          this.#completeness += 0.25 + 0.25 * parent.#completeness;
+          this.#completeness += 0.25 + 0.25 * (parent.#completeness ?? 0);
         }
       }
+    } finally {
+      this.#addingAncestors = false;
     }
   }
   // Record an ancestor, keeping the shortest path if it is already known.
+  // A person in a loop is not counted as their own ancestor.
   #addAncestorGeneration(id, generations) {
+    if (id === this.#id) {
+      return;
+    }
     const known = this.#ancestorGenerations.get(id);
     if (known === undefined || generations < known) {
       this.#ancestorGenerations.set(id, generations);

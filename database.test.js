@@ -142,6 +142,23 @@ test('Completeness index counts parents and their indexes', () => {
   expect(db.completenessIndex('gf')).toBe(0);
 });
 
+test('createAncestors survives a loop in the parent links', () => {
+  const db = new Database();
+  // a and b are recorded as each other's father, as can happen on Geni.
+  db.addWithAttributes('a', { name: 'A', father: 'b' });
+  db.addWithAttributes('b', { name: 'B', father: 'a' });
+  db.addWithAttributes('c', { name: 'C', father: 'a' });
+  db.addWithAttributes('m', { name: 'M' });
+  db.addWithAttributes('d', { name: 'D', father: 'b', mother: 'm' });
+  expect(() => db.createAncestors()).not.toThrow();
+  // No one is their own ancestor, and those below the loop get both.
+  expect(db.get('a').ancestors()).toStrictEqual(new Set(['b']));
+  expect(db.get('b').ancestors()).toStrictEqual(new Set(['a']));
+  expect(db.get('c').ancestors()).toStrictEqual(new Set(['a', 'b']));
+  expect(db.get('d').ancestors()).toStrictEqual(new Set(['b', 'm', 'a']));
+  expect(Number.isNaN(db.get('c').completenessIndex())).toBe(false);
+});
+
 test('Completeness index ignores links to persons not in the database', () => {
   const db = new Database();
   const child = db.addWithAttributes('c', { name: 'Child', father: 'missing' });
