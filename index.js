@@ -309,6 +309,10 @@ function loadProfileList() {
 // this key.
 const initialsOnlyKey = 'initialsOnly';
 
+// The year limit for grouping ancestors is remembered in localStorage
+// under this key.
+const groupingYearLimitKey = 'groupingYearLimit';
+
 // The name of person as shown on the page (see display.displayName).
 function displayName(person) {
   return display.displayName(
@@ -1279,6 +1283,7 @@ algorithmSelectElement.addEventListener('change', () => {
 
 // The ancestor sets do not change with the limit, so only regroup.
 groupingYearLimitElement.addEventListener('input', () => {
+  localStorage.setItem(groupingYearLimitKey, groupingYearLimitElement.value);
   groupingYearLimitValueElement.textContent = groupingYearLimitElement.value;
   regroupProfiles();
 });
@@ -1295,6 +1300,17 @@ savedProfileAdditionCount = 0;
 console.log('Database size', db.size());
 displayAlgorithmSelect();
 initialsOnlyElement.checked = localStorage.getItem(initialsOnlyKey) === 'true';
+// The slider keeps a stored year within its range and steps; a stored
+// value that is not a number is ignored, as the slider would otherwise
+// go to the middle.
+const storedGroupingYearLimit = localStorage.getItem(groupingYearLimitKey);
+if (
+  storedGroupingYearLimit !== null &&
+  Number.isFinite(Number(storedGroupingYearLimit))
+) {
+  groupingYearLimitElement.value = storedGroupingYearLimit;
+  groupingYearLimitValueElement.textContent = groupingYearLimitElement.value;
+}
 selectGroup(localStorage.getItem(currentGroupKey) ?? '');
 buildAncestorGroups();
 if (groupsMigrated) {
