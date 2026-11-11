@@ -6,14 +6,75 @@ export {
   makeGroupList,
   makeRootDescendantGroups,
   removeInnerParents,
+  ancestorsBornFrom,
 };
 
+// An ancestry gives the ancestors of a person to group by, as a map of
+// ancestor id -> generations back (the shortest path). By default, all
+// known ancestors.
+function allAncestors(person) {
+  return person.ancestorGenerations();
+}
+
+// The ancestors of person found by following the parent links upwards,
+// stopping at anyone born before yearLimit. The ancestors of such a
+// person are left out too, even if their birth year is not known, since
+// they are older still. Same form and order as
+// Person.ancestorGenerations(), so that groupings that take the first
+// of equals give the same result as without a limit when no one is left
+// out.
+function ancestorsBornFrom(db, person, yearLimit) {
+  const generations = new Map();
+  const seen = new Set([person.id()]);
+  let level = [person];
+  for (let generation = 1; level.length > 0; generation++) {
+    const next = [];
+    for (const child of level) {
+      for (const parentId of [child.father(), child.mother()]) {
+        const parent = parentId && db.get(parentId);
+        if (!parent || seen.has(parent.id())) {
+          continue;
+        }
+        seen.add(parent.id());
+        if (parent.birth() !== undefined && parent.birth() < yearLimit) {
+          continue;
+        }
+        generations.set(parent.id(), generation);
+        next.push(parent);
+      }
+    }
+    level = next;
+  }
+  const ordered = new Map();
+  for (const id of person.ancestorGenerations().keys()) {
+    if (generations.has(id)) {
+      ordered.set(id, generations.get(id));
+    }
+  }
+  // Any not in the ancestor set (if it is out of date) go last.
+  for (const [id, generation] of generations) {
+    if (!ordered.has(id)) {
+      ordered.set(id, generation);
+    }
+  }
+  return ordered;
+}
+
+// The ancestry to group by: all ancestors, or with yearLimit, those
+// born from that year on (see ancestorsBornFrom).
+function ancestryFor(db, yearLimit) {
+  if (yearLimit === undefined) {
+    return allAncestors;
+  }
+  return (person) => ancestorsBornFrom(db, person, yearLimit);
+}
+
 class CommonAncestorGroup {
-  constructor(rootPerson) {
+  constructor(rootPerson, ancestry = allAncestors) {
     this.persons = [rootPerson];
-    this.ancestors = new Set(rootPerson.ancestors());
     // Generations back from the farthest member to each common ancestor.
-    this.generations = new Map(rootPerson.ancestorGenerations());
+    this.generations = new Map(ancestry(rootPerson));
+    this.ancestors = new Set(this.generations.keys());
   }
   mergeGroup(group) {
     this.persons.push(...group.persons);
@@ -127,13 +188,17 @@ function mergeMostCompleteFirst(groupList, score) {
 // Start with one group per person, and merge pairs of groups until no
 // two groups share any ancestor. The score is one of scoringAlgorithms,
 // so that they can be compared on the same data. merge picks the pair:
-// by default the highest scoring one.
+// by default the highest scoring one. ancestry gives the ancestors to
+// group by (see allAncestors).
 function makeGroupList(
   personList,
   score = scoringAlgorithms.sharedAncestors,
   merge = mergeOverlappingGroups,
+  ancestry = allAncestors,
 ) {
-  let groupList = personList.map((person) => new CommonAncestorGroup(person));
+  let groupList = personList.map(
+    (person) => new CommonAncestorGroup(person, ancestry),
+  );
   let currentSize = groupList.length;
   while (true) {
     groupList = merge(groupList, score);
@@ -149,15 +214,25 @@ function makeGroupList(
 // the root with the most descendants among them. Repeat with the persons
 // not yet grouped, until no root has more than one descendant left.
 // Those left over get a group each, as in makeGroupList.
-// Ties go to the root found first.
-function makeRootDescendantGroups(personList, db) {
+// Ties go to the root found first. ancestry is as for makeGroupList; a
+// root is then an ancestor with no parent among the person's ancestors.
+function makeRootDescendantGroups(personList, db, ancestry = allAncestors) {
+  const ancestries = new Map(
+    personList.map((person) => [person, ancestry(person)]),
+  );
+  const ancestorsOf = (person) => ancestries.get(person);
   const groupList = [];
   let remaining = personList;
   while (true) {
     const descendants = new Map(); // root id -> [person]
     for (const person of remaining) {
-      for (const id of person.ancestors()) {
-        if (db.get(id).ancestors().size === 0) {
+      const ancestors = ancestorsOf(person);
+      for (const id of ancestors.keys()) {
+        const ancestor = db.get(id);
+        const isRoot = ![ancestor.father(), ancestor.mother()].some(
+          (parentId) => parentId && ancestors.has(db.get(parentId)?.id()),
+        );
+        if (isRoot) {
           if (!descendants.has(id)) {
             descendants.set(id, []);
           }
@@ -174,42 +249,70 @@ function makeRootDescendantGroups(personList, db) {
     if (members.length < 2) {
       break;
     }
-    const group = new CommonAncestorGroup(members[0]);
+    const group = new CommonAncestorGroup(members[0], ancestorsOf);
     members
       .slice(1)
-      .forEach((person) => group.mergeGroup(new CommonAncestorGroup(person)));
+      .forEach((person) =>
+        group.mergeGroup(new CommonAncestorGroup(person, ancestorsOf)),
+      );
     groupList.push(group);
     remaining = remaining.filter((person) => !members.includes(person));
   }
   return groupList.concat(
-    remaining.map((person) => new CommonAncestorGroup(person)),
+    remaining.map((person) => new CommonAncestorGroup(person, ancestorsOf)),
   );
 }
 
 // All ways of making the group list, by name, for the user to choose
-// between. Each takes a list of persons and the database they are in,
-// and returns a list of CommonAncestorGroups.
+// between. Each takes a list of persons, the database they are in and
+// optionally a year limit: ancestors born before it, and their
+// ancestors, are left out (see ancestorsBornFrom). Each returns a list
+// of CommonAncestorGroups.
 const groupingAlgorithms = {
-  sharedAncestors: (persons) =>
-    makeGroupList(persons, scoringAlgorithms.sharedAncestors),
-  kinship: (persons) => makeGroupList(persons, scoringAlgorithms.kinship),
-  closestAncestor: (persons) =>
-    makeGroupList(persons, scoringAlgorithms.closestAncestor),
-  sharedAncestorsCompleteness: (persons) =>
+  sharedAncestors: (persons, db, yearLimit) =>
+    makeGroupList(
+      persons,
+      scoringAlgorithms.sharedAncestors,
+      mergeOverlappingGroups,
+      ancestryFor(db, yearLimit),
+    ),
+  kinship: (persons, db, yearLimit) =>
+    makeGroupList(
+      persons,
+      scoringAlgorithms.kinship,
+      mergeOverlappingGroups,
+      ancestryFor(db, yearLimit),
+    ),
+  closestAncestor: (persons, db, yearLimit) =>
+    makeGroupList(
+      persons,
+      scoringAlgorithms.closestAncestor,
+      mergeOverlappingGroups,
+      ancestryFor(db, yearLimit),
+    ),
+  sharedAncestorsCompleteness: (persons, db, yearLimit) =>
     makeGroupList(
       persons,
       scoringAlgorithms.sharedAncestors,
       mergeMostCompleteFirst,
+      ancestryFor(db, yearLimit),
     ),
-  kinshipCompleteness: (persons) =>
-    makeGroupList(persons, scoringAlgorithms.kinship, mergeMostCompleteFirst),
-  closestAncestorCompleteness: (persons) =>
+  kinshipCompleteness: (persons, db, yearLimit) =>
+    makeGroupList(
+      persons,
+      scoringAlgorithms.kinship,
+      mergeMostCompleteFirst,
+      ancestryFor(db, yearLimit),
+    ),
+  closestAncestorCompleteness: (persons, db, yearLimit) =>
     makeGroupList(
       persons,
       scoringAlgorithms.closestAncestor,
       mergeMostCompleteFirst,
+      ancestryFor(db, yearLimit),
     ),
-  rootDescendants: makeRootDescendantGroups,
+  rootDescendants: (persons, db, yearLimit) =>
+    makeRootDescendantGroups(persons, db, ancestryFor(db, yearLimit)),
 };
 
 // Takes a Set(ancestor id) and removes
@@ -227,12 +330,10 @@ function removeInnerParents(db, groupAncestors) {
   ancestorList.map((person) => {
     potentialInnerIdSet = potentialInnerIdSet.union(person.ancestors());
   });
-  // In theory, potentialInners is a subset of groupAncestors.
-  // Verify.
-  const subsetSize = potentialInnerIdSet.intersection(groupAncestors).size;
-  if (subsetSize != potentialInnerIdSet.size) {
-    console.log('Error: not all potential inners were in set');
-  }
+  // potentialInners is not always a subset of groupAncestors: with a
+  // year limit on grouping, the older ancestors are left out of the
+  // group. That does not matter, since only those in the group are
+  // removed.
   const edgePeopleIds = groupAncestors.difference(potentialInnerIdSet);
   // This should be >= 1 person. Verify.
   if (edgePeopleIds.size < 1) {

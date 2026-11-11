@@ -55,6 +55,23 @@ tr.excluded {
   margin-top: 0.5em;
 }
 
+/* A line of its own, so that the slider can shrink to fit. */
+#grouping-year-limit-label {
+  display: flex;
+  align-items: center;
+  gap: 0.3em;
+  white-space: nowrap;
+}
+
+/* About three times the usual length, shrinking when there is no room.
+   Reversed, so that recent years are to the left. */
+#grouping-year-limit {
+  direction: rtl;
+  flex: 0 1 390px;
+  min-width: 4em;
+  margin: 0;
+}
+
 #display-path-label {
   white-space: nowrap;
 }
