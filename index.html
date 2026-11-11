@@ -99,7 +99,11 @@
         <p>
           Grouping:<select id="algorithm-select"></select>
           <label id="display-path-label">
-            <input type="checkbox" id="display-path"> Display path
+            Show:<select id="display-path">
+              <option value="none">No path</option>
+              <option value="path">Path</option>
+              <option value="tree">Tree</option>
+            </select>
           </label>
         </p>
         <div id="group-list">

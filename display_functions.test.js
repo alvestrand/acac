@@ -14,6 +14,7 @@ import {
   ungroupedIds,
   groupListEntries,
   pathsToAncestor,
+  descendantTree,
   displayedAncestorGroups,
   algorithmLabel,
   treeBuildingResult,
@@ -191,6 +192,64 @@ test('pathsToAncestor returns every known parent path', () => {
     ['member', 'father', 'ancestor'],
     ['member', 'mother', 'ancestor'],
   ]);
+});
+
+// The ids in a descendant tree, as nested arrays; members end in '*'.
+function treeIds(nodes) {
+  return nodes.map((node) => [
+    node.person.id() + (node.isMember ? '*' : ''),
+    treeIds(node.children),
+  ]);
+}
+
+test('descendantTree joins shared paths and repeats a member reached twice', () => {
+  const db = new Database();
+  db.addWithAttributes('h', { name: 'Husband' });
+  db.addWithAttributes('w', { name: 'Wife' });
+  db.addWithAttributes('s1', { name: 'Son', father: 'h', mother: 'w' });
+  db.addWithAttributes('s2', { name: 'Daughter', father: 'h', mother: 'w' });
+  db.addWithAttributes('g1', { name: 'Grandson', father: 's1' });
+  db.addWithAttributes('g2', { name: 'Granddaughter', mother: 's2' });
+  // a descends from the couple through both children.
+  db.addWithAttributes('a', { name: 'A', father: 'g1', mother: 'g2' });
+  db.addWithAttributes('b', { name: 'B', father: 'g1' });
+  db.addWithAttributes('c', { name: 'C' });
+  db.createAncestors();
+  const { roots, unconnected } = descendantTree(
+    db,
+    ['a', 'b', 'c'].map((id) => db.get(id)),
+    [db.get('h'), db.get('w')],
+  );
+  expect(treeIds(roots)).toStrictEqual([
+    [
+      's1',
+      [
+        [
+          'g1',
+          [
+            ['a*', []],
+            ['b*', []],
+          ],
+        ],
+      ],
+    ],
+    ['s2', [['g2', [['a*', []]]]]],
+  ]);
+  expect(unconnected.map((person) => person.id())).toStrictEqual(['c']);
+});
+
+test('descendantTree marks a member who is on the path to another', () => {
+  const db = new Database();
+  db.addWithAttributes('h', { name: 'Husband' });
+  db.addWithAttributes('p', { name: 'Parent', father: 'h' });
+  db.addWithAttributes('k', { name: 'Kid', father: 'p' });
+  db.createAncestors();
+  const { roots } = descendantTree(
+    db,
+    [db.get('p'), db.get('k')],
+    [db.get('h')],
+  );
+  expect(treeIds(roots)).toStrictEqual([['p*', [['k*', []]]]]);
 });
 
 test('displayedAncestorGroups pairs co-parents and orders husband first', () => {
