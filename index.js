@@ -191,6 +191,9 @@ const groupFileMessage = document.getElementById('group-file-message');
 const addProfileElement = document.getElementById('add-profile');
 const addProfileButton = document.getElementById('add-profile-now');
 const addProfileMessage = document.getElementById('add-profile-message');
+const addProfileSuggestionsElement = document.getElementById(
+  'add-profile-suggestions',
+);
 const profileListElement = document.getElementById('profile-list');
 const queueSizeElement = document.getElementById('queue-size');
 const saveDatabaseButton = document.getElementById('save-database');
@@ -1292,14 +1295,125 @@ loadGroupInput.addEventListener('change', async () => {
   }
 });
 
+// Suggestions for the "Add profile" field ==========================
+
+// The suggestions shown under the field, and the one marked with the
+// arrow keys (-1 for none).
+let profileSuggestions = [];
+let markedSuggestion = -1;
+
+// The suggestions for the text in the field: members of any group whose
+// names start with it, leaving out the members of the current group.
+function suggestionsFor(text) {
+  const persons = Object.values(groupStore.groups())
+    .flat()
+    .map((id) => db.get(id))
+    .filter((person) => person);
+  return display.profileSuggestions(
+    text,
+    persons,
+    new Set(currentProfileIds()),
+  );
+}
+
+function showProfileSuggestions(suggestions) {
+  profileSuggestions = suggestions;
+  markedSuggestion = -1;
+  addProfileSuggestionsElement.replaceChildren(
+    ...suggestions.map((suggestion, index) => {
+      const item = document.createElement('li');
+      item.id = 'add-profile-suggestion-' + index;
+      item.setAttribute('role', 'option');
+      item.innerText = display.suggestionText(suggestion);
+      // Choosing on mousedown, and keeping the focus in the field, means
+      // that no change event is sent for the half-typed name.
+      item.addEventListener('mousedown', (event) => {
+        event.preventDefault();
+        chooseSuggestion(suggestion);
+      });
+      return item;
+    }),
+  );
+  addProfileSuggestionsElement.hidden = suggestions.length === 0;
+  addProfileElement.setAttribute(
+    'aria-expanded',
+    String(suggestions.length > 0),
+  );
+  addProfileElement.removeAttribute('aria-activedescendant');
+}
+
+function hideProfileSuggestions() {
+  showProfileSuggestions([]);
+}
+
+function markSuggestion(index) {
+  markedSuggestion = index;
+  [...addProfileSuggestionsElement.children].forEach((item, i) =>
+    item.classList.toggle('marked', i === index),
+  );
+  if (index >= 0) {
+    addProfileElement.setAttribute(
+      'aria-activedescendant',
+      'add-profile-suggestion-' + index,
+    );
+  } else {
+    addProfileElement.removeAttribute('aria-activedescendant');
+  }
+}
+
+// Add the suggested person, as if their id had been pasted.
+function chooseSuggestion(suggestion) {
+  hideProfileSuggestions();
+  addProfileElement.value = suggestion.id();
+  startUserOperation();
+  addProfile();
+}
+
+addProfileElement.addEventListener('input', () => {
+  showProfileSuggestions(suggestionsFor(addProfileElement.value));
+});
+
+addProfileElement.addEventListener('keydown', (event) => {
+  if (profileSuggestions.length === 0) {
+    return;
+  }
+  const count = profileSuggestions.length;
+  if (event.key === 'ArrowDown') {
+    event.preventDefault();
+    markSuggestion((markedSuggestion + 1) % count);
+  } else if (event.key === 'ArrowUp') {
+    event.preventDefault();
+    markSuggestion(markedSuggestion <= 0 ? count - 1 : markedSuggestion - 1);
+  } else if (event.key === 'Enter') {
+    // Enter takes the marked suggestion, or the first one.
+    event.preventDefault();
+    chooseSuggestion(profileSuggestions[Math.max(markedSuggestion, 0)]);
+  } else if (event.key === 'Escape') {
+    hideProfileSuggestions();
+  }
+});
+
+addProfileElement.addEventListener('blur', hideProfileSuggestions);
+
 addProfileElement.addEventListener('change', async () => {
   console.log('Change event detected');
+  // A name typed to find a suggestion is not a profile id; leaving the
+  // field should not try to fetch it.
+  if (suggestionsFor(addProfileElement.value).length > 0) {
+    return;
+  }
   startUserOperation();
   addProfile();
 });
 
 addProfileButton.addEventListener('click', async () => {
   console.log('Click detected');
+  // With a name typed, add the first person suggested for it.
+  const suggestions = suggestionsFor(addProfileElement.value);
+  if (suggestions.length > 0) {
+    chooseSuggestion(suggestions[0]);
+    return;
+  }
   startUserOperation();
   addProfile();
 });

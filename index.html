@@ -68,10 +68,14 @@
                 <input type="file" id="load-group-input" accept=".json,application/json" hidden>
                 <span id="group-file-message"></span>
               </p>
-              <p>
-                Add profile:<input type="text" id="add-profile">
+              <div class="add-profile-line">
+                Add profile:<span class="add-profile-box"><input type="text" id="add-profile"
+                    autocomplete="off" role="combobox" aria-autocomplete="list"
+                    aria-controls="add-profile-suggestions" aria-expanded="false"
+                    placeholder="Geni URL or name in a group"><ul
+                    id="add-profile-suggestions" role="listbox" hidden></ul></span>
                 <button id="add-profile-now">Add!</button>
-              </p>
+              </div>
               <div id="add-profile-message"></div>
             </td>
             <td class="group-notes-cell">

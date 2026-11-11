@@ -47,6 +47,60 @@ function ancestorFraction(known, generation) {
   return `${known}/${2 ** generation}`;
 }
 
+// Profile suggestions =============================================
+
+// Letters that are not split into a base letter and an accent, written
+// as they are when the letter is not at hand, such as Nærum as Naerum.
+const letterSpellings = { æ: 'ae', ø: 'o', œ: 'oe', ß: 'ss', ł: 'l', đ: 'd' };
+
+// A name or search text made comparable: lower case, without accents.
+function searchForm(text) {
+  return (text ?? '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .replace(/[æøœßłđ]/g, (letter) => letterSpellings[letter]);
+}
+
+// A name or search text made comparable for prefix matching: in
+// searchForm, without leading spaces, and with runs of spaces as one.
+function prefixForm(text) {
+  return searchForm(text).trimStart().replace(/\s+/g, ' ');
+}
+
+// The persons whose names start with query, for the suggestions under
+// the "Add profile" field. persons are the members of the groups.
+// Only the start of the name is matched, ignoring case and accents.
+// Persons whose ids are in skipIds (the members of the current group)
+// are left out. Returns up to limit persons, each once, sorted by name.
+function profileSuggestions(query, persons, skipIds, limit = 5) {
+  const prefix = prefixForm(query);
+  if (prefix === '') {
+    return [];
+  }
+  const found = new Set(
+    persons.filter(
+      (person) =>
+        !skipIds.has(person.id()) &&
+        prefixForm(person.name()).startsWith(prefix),
+    ),
+  );
+  return [...found]
+    .sort((a, b) =>
+      (a.name() ?? '').localeCompare(b.name() ?? '', undefined, {
+        numeric: true,
+      }),
+    )
+    .slice(0, limit);
+}
+
+// The text of a suggestion: the name and birth year, such as
+// 'Kari Nilsdtr (1790)'.
+function suggestionText(person) {
+  const birth = person.birth() === undefined ? '' : ` (${person.birth()})`;
+  return `${person.name()}${birth}`;
+}
+
 // The profile list ================================================
 
 // The completeness index as shown in the profile list: -log2(1 - index),
@@ -340,6 +394,8 @@ export {
   initials,
   hidesName,
   displayName,
+  profileSuggestions,
+  suggestionText,
   formatCompleteness,
   ancestorFraction,
   sortProfiles,
