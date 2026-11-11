@@ -50,9 +50,12 @@ done
 
 Tests use Jest and should follow the existing module-focused pattern.
 Use `FakeGeniClient` for tree-building tests and mock the Geni SDK for
-request-queue tests. Run `npm test` after changes. `index.js` has no
-automated UI tests, so page changes should also be tried in a browser
-and that limitation reported.
+request-queue tests. Run `npm test` after changes. For `index.js`
+there is only a smoke test, `index_page.test.js`, which loads the page
+in headless Chrome with puppeteer-core and checks that it starts
+without errors. It is skipped if no Chrome is found; set `CHROME_PATH`
+to point it at one. Page changes should also be tried in a browser and
+that limitation reported.
 
 ## Commit & Pull Request Guidelines
 

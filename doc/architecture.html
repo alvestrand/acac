@@ -298,8 +298,10 @@ uses unions.</li>
 </ul>
 <h2 id="known-issues-and-limits">Known Issues and Limits</h2>
 <ul>
-<li><code>index.js</code> has no automated UI tests. Test UI changes in
-a browser when possible; API behavior can be inspected with
+<li><code>index.js</code> has only a smoke test,
+<code>index_page.test.js</code>, which loads the page in headless Chrome
+and checks that it starts without errors. Test UI changes in a browser
+when possible; API behavior can be inspected with
 <code>testpage.html</code>.</li>
 </ul>
 </body>
