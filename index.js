@@ -202,6 +202,10 @@ const stopFetchingButton = document.getElementById('stop-fetching');
 const yearLimitElement = document.getElementById('year-limit');
 const pathAgeLimitElement = document.getElementById('path-age-limit');
 const pathLengthLimitElement = document.getElementById('path-length-limit');
+const groupingYearLimitElement = document.getElementById('grouping-year-limit');
+const groupingYearLimitValueElement = document.getElementById(
+  'grouping-year-limit-value',
+);
 const recalculateGroupsButton = document.getElementById('recalculate-groups');
 const updatePartialProfilesButton = document.getElementById(
   'update-partial-profiles',
@@ -911,11 +915,19 @@ function displayAlgorithmSelect() {
     : 'sharedAncestors';
 }
 
+// Build the ancestor sets afresh and group the profiles.
 function buildAncestorGroups() {
   db.createAncestors();
+  regroupProfiles();
+}
+
+// Group the profiles with the ancestor sets as they are, leaving out
+// ancestors born before the grouping year limit.
+function regroupProfiles() {
   ancestorGroups = groupingAlgorithms[algorithmSelectElement.value](
     profileList.filter((profile) => !excludedProfileIds.has(profile.id())),
     db,
+    Number(groupingYearLimitElement.value),
   );
   console.log('Ancestor groups are', ancestorGroups);
   ungroupedProfileIds = display.ungroupedIds(ancestorGroups);
@@ -1263,6 +1275,12 @@ algorithmSelectElement.addEventListener('change', () => {
   startUserOperation();
   localStorage.setItem(algorithmKey, algorithmSelectElement.value);
   buildAncestorGroups();
+});
+
+// The ancestor sets do not change with the limit, so only regroup.
+groupingYearLimitElement.addEventListener('input', () => {
+  groupingYearLimitValueElement.textContent = groupingYearLimitElement.value;
+  regroupProfiles();
 });
 
 displayPathElement.addEventListener('change', () => {

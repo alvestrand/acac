@@ -4,6 +4,7 @@ import {
   groupingAlgorithms,
   makeGroupList,
   makeRootDescendantGroups,
+  ancestorsBornFrom,
 } from './ancestor_finder.js';
 
 // X and Y are first cousins: their fathers share the parents g1 and g2.
@@ -179,4 +180,90 @@ test('groupingAlgorithms has a completeness variant per scoring algorithm', () =
   expect(
     memberIds(groupingAlgorithms.kinshipCompleteness(persons, db)),
   ).toStrictEqual([['Y', 'X'], ['Z'], ['N']]);
+});
+
+// As cousinsAndDistantRelative, with birth years: the cousins' shared
+// grandparents g1 and g2 are recent, while a2, the start of the line Y
+// and Z share, is old. Those above a2 have no birth year.
+function cousinsWithBirthYears() {
+  const db = new Database();
+  const add = (id, father, mother, year) =>
+    db.addWithAttributes(id, {
+      name: id,
+      father,
+      mother,
+      ...(year === undefined ? {} : { birth: { date: { year } } }),
+    });
+  add('g1', undefined, undefined, 1850);
+  add('g2', undefined, undefined, 1852);
+  add('xf', 'g1', 'g2', 1880);
+  add('yf', 'g1', 'g2', 1882);
+  add('a4');
+  add('a3', 'a4');
+  add('a2', 'a3', undefined, 1700);
+  add('a1', 'a2');
+  add('ym', 'a1', undefined, 1885);
+  add('z3', 'a2');
+  add('z2', 'z3');
+  add('zf', 'z2', undefined, 1880);
+  add('X', 'xf', undefined, 1910);
+  add('Y', 'yf', 'ym', 1912);
+  add('Z', 'zf', undefined, 1915);
+  add('N', undefined, undefined, 1920);
+  db.createAncestors();
+  return db;
+}
+
+test('ancestorsBornFrom stops at those born before the limit', () => {
+  const db = cousinsWithBirthYears();
+  // a2 is born before 1800, so it and a3 and a4 above it are left out,
+  // although a3 and a4 have no birth year. a1 has none either, but is
+  // kept, as it is below a2.
+  expect(ancestorsBornFrom(db, db.get('Y'), 1800)).toStrictEqual(
+    new Map([
+      ['yf', 1],
+      ['ym', 1],
+      ['g1', 2],
+      ['g2', 2],
+      ['a1', 2],
+    ]),
+  );
+  // With an earlier limit, all are kept, as in ancestorGenerations.
+  expect(ancestorsBornFrom(db, db.get('Y'), 1600)).toStrictEqual(
+    db.get('Y').ancestorGenerations(),
+  );
+});
+
+test('a year limit leaves old shared ancestors out of the grouping', () => {
+  const db = cousinsWithBirthYears();
+  const persons = ['X', 'Y', 'Z', 'N'].map((id) => db.get(id));
+  const sorted = (groups) => memberIds(groups).map((ids) => ids.toSorted());
+  // Without a limit, Y has more ancestors in common with Z than with X.
+  expect(sorted(groupingAlgorithms.sharedAncestors(persons, db))).toEqual([
+    ['X'],
+    ['Y', 'Z'],
+    ['N'],
+  ]);
+  // From 1800 on, only the cousins share ancestors, whatever the
+  // algorithm.
+  for (const name of Object.keys(groupingAlgorithms)) {
+    const groups = groupingAlgorithms[name](persons, db, 1800);
+    expect(sorted(groups).toSorted()).toEqual([['N'], ['X', 'Y'], ['Z']]);
+    const cousins = groups.find((group) => group.persons.length === 2);
+    expect(cousins.ancestors).toStrictEqual(new Set(['g1', 'g2']));
+  }
+});
+
+test('a year limit that leaves no one out gives the same groups', () => {
+  const db = cousinsAndDistantRelative();
+  db.addWithAttributes('V', { name: 'V', father: 'g1' });
+  db.addWithAttributes('W', { name: 'W', father: 'z2' });
+  db.addWithAttributes('U', { name: 'U', father: 'zf' });
+  db.createAncestors();
+  const persons = ['X', 'Y', 'Z', 'N', 'V', 'W', 'U'].map((id) => db.get(id));
+  for (const name of Object.keys(groupingAlgorithms)) {
+    expect(memberIds(groupingAlgorithms[name](persons, db, 1000))).toEqual(
+      memberIds(groupingAlgorithms[name](persons, db)),
+    );
+  }
 });

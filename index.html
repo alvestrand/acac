@@ -33,8 +33,13 @@
   <label>
     Length limit for path search
     <input type="number" id="path-length-limit" value="25"></input>
+  </label><br/>
+  <label id="grouping-year-limit-label">
+    Limit for grouping ancestors
+    <input type="range" id="grouping-year-limit" min="1000" max="1800"
+      step="25" value="1000"></input>
+    <output id="grouping-year-limit-value">1000</output>
   </label>
-  <br/>
   <span id="queue-size">Queue empty</span>
   <button id="stop-fetching" hidden>Stop fetching</button>
   <table id="layout">
