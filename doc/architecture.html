@@ -220,13 +220,29 @@ descendants. The selected profile groups and their display contents are
 built in <code>index.js</code> using
 <code>display_functions.js</code>.</li>
 <li><code>groups.js</code>: group membership, notes, and profiles
-excluded from matching, stored in localStorage.</li>
+excluded from matching, held in memory by <code>GroupStore</code> and
+saved in the database file by <code>opfsdb.js</code>.
+<code>mergeGroups</code> merges the groups of two tabs three ways; both
+notes texts are kept, separated by <code>\n---\n</code>, when both tabs
+changed them. <code>readStoredGroups</code> reads the groups that older
+versions kept in localStorage. The name of the current group is not part
+of the groups: each tab keeps its own in <code>index.js</code>,
+remembered in localStorage.</li>
 <li><code>file_export.js</code>: whole-database and group export/import.
 When merging records, newer Geni <code>updated_at</code> data replaces
 older attributes while parent links from either record are
 retained.</li>
-<li><code>opfsdb.js</code>: persistence of the profile database in the
-Origin Private File System.</li>
+<li><code>opfsdb.js</code>: <code>DatabaseFile</code> persists the
+profile database and groups in one file in the Origin Private File
+System. The file has a version number that is incremented on each save.
+If the stored version is higher than the one the tab last loaded or
+saved, another tab has saved, and the stored data is merged into the
+tab’s (<code>Database.mergeFrom</code>, <code>mergeGroups</code>) before
+saving. Saves run under a Web Lock. A file with no <code>groups</code>
+is migrated from localStorage. Deleting profiles is not merged: a
+removed profile comes back from another tab’s file.</li>
+<li><code>fake_opfs.js</code>: in-memory fakes of the file system
+directory and Web Locks, used by <code>opfsdb.test.js</code>.</li>
 <li><code>fake_geni_client.js</code>: an in-memory Geni API fake used by
 <code>tree_builder.test.js</code>.</li>
 <li><code>tools/count_groups.js</code>: manually compares grouping
