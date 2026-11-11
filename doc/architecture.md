@@ -117,5 +117,7 @@ Geni behavior changes:
 
 ## Known Issues and Limits
 
-- `index.js` has no automated UI tests. Test UI changes in a browser
-  when possible; API behavior can be inspected with `testpage.html`.
+- `index.js` has only a smoke test, `index_page.test.js`, which loads
+  the page in headless Chrome and checks that it starts without
+  errors. Test UI changes in a browser when possible; API behavior can
+  be inspected with `testpage.html`.
