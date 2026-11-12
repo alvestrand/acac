@@ -250,6 +250,14 @@ test('mergeGroups deletes a group only if the other tab left it alone', () => {
   expect(mergeGroups(base, base, {}).groups).toStrictEqual({});
 });
 
+test('mergeGroups leaves out a group deleted in both tabs', () => {
+  const base = { x: group(['a']), y: group(['b']) };
+  const kept = { y: group(['b']) };
+  expect(mergeGroups(base, kept, kept).groups).toStrictEqual({
+    y: group(['b']),
+  });
+});
+
 test('mergeGroups maps ids merged on Geni and removes duplicates', () => {
   const base = { g: group(['old']) };
   const result = mergeGroups(

@@ -213,8 +213,9 @@ function mergeGroups(base, mine, theirs, mapId = (id) => id) {
       };
     } else {
       // Present in one tab only: new there, or deleted in the other tab.
+      // If it was deleted in both tabs, it is in neither.
       const present = m ?? t;
-      if (!b || !sameGroup(present, b)) {
+      if (present && (!b || !sameGroup(present, b))) {
         merged[name] = present;
       }
     }
