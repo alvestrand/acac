@@ -4,6 +4,8 @@ import {
   initials,
   hidesName,
   displayName,
+  profileSuggestions,
+  suggestionText,
   formatCompleteness,
   ancestorFraction,
   sortProfiles,
@@ -311,4 +313,47 @@ test('file names carry the date and the group name', () => {
     'acac-group-segment 7-2026-10-18.json',
   );
   expect(groupFileName('', date)).toBe('acac-group-unnamed-2026-10-18.json');
+});
+
+// The members of two groups, for the profile suggestions. Kari is in
+// both groups, so she is listed twice.
+function makeSuggestionPersons() {
+  const db = new Database();
+  const kari = db.addWithAttributes('kari', {
+    name: 'Kari Nilsdtr Nærum',
+    birth: { date: { year: 1790 } },
+  });
+  const ola = db.addWithAttributes('ola', { name: 'Ola Karisen' });
+  const per = db.addWithAttributes('per', { name: 'Per Olsen' });
+  const andre = db.addWithAttributes('andre', { name: 'André Lie' });
+  const peder = db.addWithAttributes('peder', { name: 'Peder Hansen' });
+  return [kari, ola, per, kari, andre, peder];
+}
+
+test('profileSuggestions matches the start of the name only', () => {
+  const persons = makeSuggestionPersons();
+  const names = (query) =>
+    profileSuggestions(query, persons, new Set()).map((p) => p.name());
+  expect(names('kari')).toEqual(['Kari Nilsdtr Nærum']);
+  expect(names('  KARI   nils')).toEqual(['Kari Nilsdtr Nærum']);
+  expect(names('ANDRE')).toEqual(['André Lie']);
+  expect(names('kari naerum')).toEqual([]);
+  expect(names('nærum')).toEqual([]);
+  expect(names('lie')).toEqual([]);
+  expect(names('  ')).toEqual([]);
+});
+
+test('profileSuggestions skips given ids and keeps to the limit', () => {
+  const persons = makeSuggestionPersons();
+  const ids = (query, skip, limit) =>
+    profileSuggestions(query, persons, new Set(skip), limit).map((p) => p.id());
+  expect(ids('pe', [])).toEqual(['peder', 'per']);
+  expect(ids('pe', ['peder'])).toEqual(['per']);
+  expect(ids('pe', [], 1)).toEqual(['peder']);
+});
+
+test('suggestionText shows the name and birth year', () => {
+  const [kari, ola] = makeSuggestionPersons();
+  expect(suggestionText(kari)).toBe('Kari Nilsdtr Nærum (1790)');
+  expect(suggestionText(ola)).toBe('Ola Karisen');
 });

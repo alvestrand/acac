@@ -188,3 +188,42 @@ tr.excluded {
   top: 2.5em;
   right: 0.5em;
 }
+
+/* The "Add profile" field, with its list of suggestions below it. */
+.add-profile-line {
+  margin: 1em 0;
+}
+
+.add-profile-box {
+  position: relative;
+  display: inline-block;
+}
+
+#add-profile {
+  width: 20em;
+}
+
+#add-profile-suggestions {
+  position: absolute;
+  left: 0;
+  top: 100%;
+  z-index: 10;
+  min-width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  background: white;
+  border: 1px solid #888;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+#add-profile-suggestions li {
+  padding: 0.2em 0.4em;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+#add-profile-suggestions li:hover,
+#add-profile-suggestions li.marked {
+  background: #def;
+}
