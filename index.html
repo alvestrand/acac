@@ -56,6 +56,8 @@
                 <button id="new-group">New group</button>
                 <button id="save-group">Save group</button>
                 <button id="load-group">Load group</button>
+                <button id="rename-group">Rename group</button>
+                <button id="delete-group">Delete group</button>
               </div>
               <div id="new-group-box" hidden>
                 <label>
@@ -63,6 +65,13 @@
                 </label>
                 <button id="new-group-create">Create</button>
                 <button id="new-group-cancel">Cancel</button>
+              </div>
+              <div id="rename-group-box" hidden>
+                <label>
+                  Name:<input type="text" id="rename-group-name">
+                </label>
+                <button id="rename-group-ok">Rename</button>
+                <button id="rename-group-cancel">Cancel</button>
               </div>
               <p>
                 <input type="file" id="load-group-input" accept=".json,application/json" hidden>

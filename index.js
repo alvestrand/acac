@@ -187,6 +187,12 @@ const newGroupCancelButton = document.getElementById('new-group-cancel');
 const saveGroupButton = document.getElementById('save-group');
 const loadGroupButton = document.getElementById('load-group');
 const loadGroupInput = document.getElementById('load-group-input');
+const renameGroupButton = document.getElementById('rename-group');
+const renameGroupBox = document.getElementById('rename-group-box');
+const renameGroupNameElement = document.getElementById('rename-group-name');
+const renameGroupOkButton = document.getElementById('rename-group-ok');
+const renameGroupCancelButton = document.getElementById('rename-group-cancel');
+const deleteGroupButton = document.getElementById('delete-group');
 const groupFileMessage = document.getElementById('group-file-message');
 const addProfileElement = document.getElementById('add-profile');
 const addProfileButton = document.getElementById('add-profile-now');
@@ -241,16 +247,21 @@ function displayGroupSelect() {
 function selectGroup(name) {
   currentGroup = name;
   localStorage.setItem(currentGroupKey, name);
-  newGroupBox.hidden = true;
+  closeGroupBoxes();
   displayGroupSelect();
   groupNotesElement.value = groupStore.notes(name);
   loadProfileList();
 }
 
+function closeGroupBoxes() {
+  newGroupBox.hidden = true;
+  renameGroupBox.hidden = true;
+}
+
 // Cancel group creation without reloading the current group, so unsaved
 // profiles are kept.
 function cancelNewGroup() {
-  newGroupBox.hidden = true;
+  closeGroupBoxes();
   groupSelectElement.value = currentGroup;
 }
 
@@ -289,6 +300,43 @@ async function createNewGroup() {
     return;
   }
   await switchToGroup(name);
+}
+
+// Rename the current group to the name in the rename box. The group as
+// shown on the page is stored first, so an unsaved group can be renamed.
+async function renameCurrentGroup() {
+  const newName = renameGroupNameElement.value.trim();
+  if (newName === currentGroup) {
+    closeGroupBoxes();
+    return;
+  }
+  saveCurrentGroupState();
+  if (groupStore.rename(currentGroup, newName) === null) {
+    // Keep the box open with the text, so the name can be corrected.
+    showErrorMessage(
+      newName === ''
+        ? 'Enter a name for the group.'
+        : 'There is already a group called "' + newName + '".',
+    );
+    return;
+  }
+  selectGroup(newName);
+  await saveDatabaseSnapshot();
+}
+
+// Delete the current group, after asking, and switch to the first
+// remaining group (or the unnamed group if there are none).
+async function deleteCurrentGroup() {
+  const label = currentGroup === '' ? '(unnamed)' : currentGroup;
+  if (!confirm('Delete the group "' + label + '"? This cannot be undone.')) {
+    return;
+  }
+  groupStore.remove(currentGroup);
+  // Select the next group before saving, as saving stores the page's
+  // group under the current name.
+  selectGroup(Object.keys(groupStore.groups()).sort()[0] ?? '');
+  buildAncestorGroups();
+  await saveDatabaseSnapshot();
 }
 
 function loadProfileList() {
@@ -1258,6 +1306,7 @@ newGroupCreateButton.addEventListener('click', () => {
 });
 
 newGroupButton.addEventListener('click', () => {
+  closeGroupBoxes();
   newGroupNameElement.value = '';
   newGroupBox.hidden = false;
   newGroupNameElement.focus();
@@ -1293,6 +1342,36 @@ loadGroupInput.addEventListener('change', async () => {
     startUserOperation();
     await loadGroupFromFile(file);
   }
+});
+
+renameGroupButton.addEventListener('click', () => {
+  closeGroupBoxes();
+  renameGroupNameElement.value = currentGroup;
+  renameGroupBox.hidden = false;
+  renameGroupNameElement.select();
+});
+
+renameGroupOkButton.addEventListener('click', () => {
+  startUserOperation();
+  renameCurrentGroup();
+});
+
+renameGroupNameElement.addEventListener('keydown', (event) => {
+  if (event.key === 'Enter') {
+    startUserOperation();
+    renameCurrentGroup();
+  } else if (event.key === 'Escape') {
+    closeGroupBoxes();
+  }
+});
+
+renameGroupCancelButton.addEventListener('click', () => {
+  closeGroupBoxes();
+});
+
+deleteGroupButton.addEventListener('click', () => {
+  startUserOperation();
+  deleteCurrentGroup();
 });
 
 // Suggestions for the "Add profile" field ==========================

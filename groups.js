@@ -87,6 +87,19 @@ class GroupStore {
     this.#groups.delete(name);
   }
 
+  // Give a group a new name, keeping its members, notes and excluded
+  // members. The new name is trimmed. Returns the new name, or null if
+  // the group doesn't exist, or the new name is blank or already used.
+  rename(oldName, newName) {
+    const trimmed = newName.trim();
+    if (!this.has(oldName) || trimmed === '' || this.has(trimmed)) {
+      return null;
+    }
+    this.#groups.set(trimmed, this.#groups.get(oldName));
+    this.#groups.delete(oldName);
+    return trimmed;
+  }
+
   // The ids of the members of a group excluded from matching.
   excluded(name) {
     return [...this.#group(name).excluded];
