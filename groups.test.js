@@ -160,6 +160,36 @@ test('remove forgets the group and its excluded members', () => {
   expect(groupStore.excluded('new')).toStrictEqual([]);
 });
 
+// Renaming groups
+
+test('rename keeps members, notes and excluded members', () => {
+  const groupStore = makeStore();
+  groupStore.saveNotes('new', 'hello');
+  groupStore.saveExcluded('new', ['g3']);
+  expect(groupStore.rename('new', 'newer')).toBe('newer');
+  expect(groupStore.has('new')).toBe(false);
+  expect(groupStore.entries('newer')).toStrictEqual(['g2', 'g3']);
+  expect(groupStore.notes('newer')).toBe('hello');
+  expect(groupStore.excluded('newer')).toStrictEqual(['g3']);
+});
+
+test('rename trims the new name', () => {
+  const groupStore = makeStore();
+  expect(groupStore.rename('new', '  newer  ')).toBe('newer');
+  expect(groupStore.has('newer')).toBe(true);
+});
+
+test('rename refuses blank and used names, and unknown groups', () => {
+  const groupStore = makeStore();
+  expect(groupStore.rename('new', '   ')).toBeNull();
+  expect(groupStore.rename('new', 'old')).toBeNull();
+  expect(groupStore.rename('missing', 'other')).toBeNull();
+  expect(groupStore.groups()).toStrictEqual({
+    old: ['g1'],
+    new: ['g2', 'g3'],
+  });
+});
+
 function group(members, notes = '', excluded = []) {
   return { members, notes, excluded };
 }
@@ -248,6 +278,14 @@ test('mergeGroups deletes a group only if the other tab left it alone', () => {
   });
   // They deleted both and I changed nothing.
   expect(mergeGroups(base, base, {}).groups).toStrictEqual({});
+});
+
+test('mergeGroups leaves out a group deleted in both tabs', () => {
+  const base = { x: group(['a']), y: group(['b']) };
+  const kept = { y: group(['b']) };
+  expect(mergeGroups(base, kept, kept).groups).toStrictEqual({
+    y: group(['b']),
+  });
 });
 
 test('mergeGroups maps ids merged on Geni and removes duplicates', () => {
