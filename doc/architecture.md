@@ -114,10 +114,33 @@ Geni behavior changes:
   profile API URLs; sample responses also include `step_count`. A
   relation's label such as `brother` or `son` is not sufficient to
   infer parent links, so ACAC uses unions.
+- Login without `jsdk.js` works the way the SDK does it: a popup to
+  `https://www.geni.com/oauth/authorize` with `response_type=token`,
+  `client_id`, `display=popup`, a `callback` name, and the page's
+  `origin`. The Geni page in the popup sends the opener a
+  `postMessage` with a query string holding `callback`,
+  `access_token`, and `refresh_token`. `logintest.html` tries this.
+- The full-page redirect flow from the public documentation
+  (`/platform/oauth/authorize` with `redirect_uri`) showed the
+  authorize screen, but after the user allowed access it ended on
+  `geni.com/home` with no token. Geni ignored the `redirect_uri` for a
+  page served from `127.0.0.1`; whether one on the app's registered
+  Site Domain would work has not been tested.
+- The API returns plain JSON, but every response, including preflights
+  and `/platform/oauth/validate_token`, has
+  `Access-Control-Allow-Origin: https://www.geni.com` whatever the
+  request's origin. Browsers therefore block `fetch` from other
+  origins, both with an `Authorization: Bearer` header (the preflight
+  fails) and with an `access_token` query parameter. The header case
+  was seen with a real token, the query parameter case with a fake
+  one. JSONP with a `callback` parameter works, which is what
+  `jsdk.js` uses. Browser extensions such as SmartCopy avoid the limit
+  through host permissions, which web pages cannot have.
 
 ## Known Issues and Limits
 
 - `index.js` has only a smoke test, `index_page.test.js`, which loads
   the page in headless Chrome and checks that it starts without
   errors. Test UI changes in a browser when possible; API behavior can
-  be inspected with `testpage.html`.
+  be inspected with `testpage.html`, and login without `jsdk.js` with
+  `logintest.html`. Neither page is deployed.
