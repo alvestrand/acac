@@ -2,8 +2,8 @@
 // a file named 'GeniDatabase'
 // in the Origin Private File System.
 //
-// The file also holds the groups, and a version number that is
-// incremented on each save. Several tabs may use the file at the same
+// The file also holds the groups, the current group of the tab that
+// saved last, and a version number that is incremented on each save. Several tabs may use the file at the same
 // time. Each tab remembers the version it last loaded or saved; if the
 // stored version is higher when the tab saves, another tab has saved in
 // between, and the stored database and groups are merged into the
@@ -14,6 +14,9 @@ import { GroupStore, mergeGroups, readStoredGroups } from './groups.js';
 export { DatabaseFile };
 
 const databaseName = 'GeniDatabase';
+// The key under which older versions kept the current group in
+// localStorage.
+const legacyCurrentGroupKey = 'currentSet';
 const lockName = 'acac-database';
 
 // The browser's file system and lock manager, used unless others are
@@ -41,10 +44,12 @@ class DatabaseFile {
   // The groups as of the last load or save, which the groups in the
   // file are compared with when merging.
   #baseGroups = {};
+  // The current group found by load, or undefined.
+  #storedCurrentGroup;
 
-  // legacyStorage (normally localStorage) holds the groups of older
-  // versions, which are moved into the file the first time it is loaded
-  // without any.
+  // legacyStorage (normally localStorage) holds the groups and current
+  // group of older versions. The groups are moved into the file the
+  // first time it is loaded without any; legacyStorage is only read.
   constructor(legacyStorage, environment = browserEnvironment) {
     this.#environment = environment;
     this.#legacyStorage = legacyStorage;
@@ -53,6 +58,13 @@ class DatabaseFile {
   // The groups, kept in the file together with the database.
   get groupStore() {
     return this.#groupStore;
+  }
+
+  // The current group of the tab that saved the file last, as found by
+  // load, for a new tab to start with. Taken from legacyStorage if the
+  // file has none. Undefined if neither has one.
+  get storedCurrentGroup() {
+    return this.#storedCurrentGroup;
   }
 
   // Load the database and the groups from the file. Returns true if the
@@ -79,6 +91,10 @@ class DatabaseFile {
     } else {
       console.log('File not found, assuming empty');
     }
+    this.#storedCurrentGroup =
+      typeof parsed?.currentGroup === 'string'
+        ? parsed.currentGroup
+        : (this.#legacyStorage.getItem(legacyCurrentGroupKey) ?? undefined);
     if (parsed && 'groups' in parsed) {
       this.#groupStore.replaceAll(parsed.groups);
       this.#baseGroups = this.#groupStore.toObject();
@@ -93,13 +109,16 @@ class DatabaseFile {
   }
 
   // Save the database and the groups, merging in what other tabs saved
-  // since this tab loaded or saved. Returns the new version, whether
+  // since this tab loaded or saved, and currentGroup, the tab's current
+  // group, unless it is undefined. Returns the new version, whether
   // anything was merged into the database or groups, the names of the
   // groups whose notes were changed in both tabs, and how many persons
   // the merge added to the database.
-  async save(db) {
+  async save(db, currentGroup) {
     const startTime = performance.now();
-    const result = await this.#withLock(() => this.#saveLocked(db));
+    const result = await this.#withLock(() =>
+      this.#saveLocked(db, currentGroup),
+    );
     console.log(
       'Database saved in',
       Math.round(performance.now() - startTime),
@@ -109,7 +128,7 @@ class DatabaseFile {
     return result;
   }
 
-  async #saveLocked(db) {
+  async #saveLocked(db, currentGroup) {
     const fileHandle = await this.#getFileHandle(true);
     const storedVersion = await readVersion(fileHandle);
     let merged = false;
@@ -134,7 +153,11 @@ class DatabaseFile {
     const groups = this.#groupStore.toObject();
     const writable = await fileHandle.createWritable();
     await writable.write(
-      JSON.stringify({ version, ...db.toJsonObject(), groups }, null, 2),
+      JSON.stringify(
+        { version, ...db.toJsonObject(), groups, currentGroup },
+        null,
+        2,
+      ),
     );
     await writable.close();
     this.#loadedVersion = version;

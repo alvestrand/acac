@@ -190,3 +190,30 @@ test('an unreadable stored file is overwritten', async () => {
   expect(result.merged).toBe(false);
   expect((await storedFile(environment)).version).toBe(6);
 });
+
+test('a new tab gets the current group of the tab that saved last', async () => {
+  const environment = fakeEnvironment();
+  const first = await openTab(environment);
+  expect(first.file.storedCurrentGroup).toBeUndefined();
+  first.file.groupStore.save('g', []);
+  await first.file.save(first.db, 'g');
+  const second = await openTab(environment);
+  expect(second.file.storedCurrentGroup).toBe('g');
+  await second.file.save(second.db, '');
+  expect((await storedFile(environment)).currentGroup).toBe('');
+  const third = await openTab(environment);
+  expect(third.file.storedCurrentGroup).toBe('');
+});
+
+test('the current group of older versions is read from local storage', async () => {
+  const environment = fakeEnvironment();
+  const localStorage = new FakeStorage();
+  localStorage.setItem('currentSet', 'old');
+  const tab = await openTab(environment, localStorage);
+  expect(tab.file.storedCurrentGroup).toBe('old');
+  await tab.file.save(tab.db, 'new');
+  expect(localStorage.length).toBe(1);
+  expect(localStorage.getItem('currentSet')).toBe('old');
+  const next = await openTab(environment, localStorage);
+  expect(next.file.storedCurrentGroup).toBe('new');
+});

@@ -152,13 +152,6 @@ class GroupStore {
     }
     return trimmed;
   }
-
-  // Save the members of a group, and those of them excluded from
-  // matching, before another group is made the current one.
-  saveMembers(name, ids, excludedIds = []) {
-    this.save(name, ids);
-    this.saveExcluded(name, excludedIds);
-  }
 }
 
 // Three-way merge of a list used as a set: keeps what theirs has and

@@ -90,12 +90,13 @@ async function main() {
       }
     });
 
-    // Settings are read from localStorage when the page starts. The
-    // family is invented, so the members' names need not be hidden.
+    // Settings are read from sessionStorage when the page starts, and
+    // kept there when the tab is reloaded. The family is invented, so
+    // the members' names need not be hidden.
     await page.goto(origin + '/index.html');
     await page.evaluate(() => {
-      localStorage.setItem('initialsOnly', 'false');
-      localStorage.setItem('displayPath', 'none');
+      sessionStorage.setItem('initialsOnly', 'false');
+      sessionStorage.setItem('displayPath', 'none');
     });
     await page.reload();
     await page.waitForSelector('#group-select option', { timeout: 10000 });

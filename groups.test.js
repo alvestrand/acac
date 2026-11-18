@@ -117,32 +117,6 @@ test('create keeps the members of an existing group', () => {
   expect(groupStore.entries('new')).toStrictEqual(['g2', 'g3']);
 });
 
-// Leaving groups
-
-test('saveMembers saves members and excluded members of a group', () => {
-  const groupStore = makeStore();
-  groupStore.saveMembers('new', ['g2', 'g3', 'g4'], ['g2']);
-  expect(groupStore.entries('new')).toStrictEqual(['g2', 'g3', 'g4']);
-  expect(groupStore.excluded('new')).toStrictEqual(['g2']);
-  groupStore.saveMembers('new', ['g2', 'g3']);
-  expect(groupStore.excluded('new')).toStrictEqual([]);
-});
-
-test('saveMembers saves a group that was never stored', () => {
-  const groupStore = makeStore();
-  groupStore.saveMembers('unsaved', ['g5']);
-  expect(groupStore.entries('unsaved')).toStrictEqual(['g5']);
-  expect(groupStore.has('unsaved')).toBe(true);
-});
-
-test('saveMembers leaves other groups and notes alone', () => {
-  const groupStore = makeStore();
-  groupStore.saveNotes('new', 'keep');
-  groupStore.saveMembers('new', []);
-  expect(groupStore.notes('new')).toBe('keep');
-  expect(groupStore.entries('old')).toStrictEqual(['g1']);
-});
-
 test('excluded members are saved per group, and empty by default', () => {
   const groupStore = makeStore();
   expect(groupStore.excluded('new')).toStrictEqual([]);
