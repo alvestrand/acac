@@ -1,0 +1,796 @@
+{
+  "groupName": "Chr 7 segment, mother's side",
+  "members": [
+    "6000000090000261327",
+    "6000000090000269246",
+    "6000000090000277165",
+    "6000000090000285084",
+    "6000000090000293003"
+  ],
+  "excluded": [],
+  "notes": "",
+  "persons": [
+    {
+      "id": "6000000090000007919",
+      "parents": [],
+      "attributes": {
+        "id": "profile-990000037",
+        "profile_url": "https://www.geni.com/people/Nils-Olsen-Haugen/6000000090000007919",
+        "public": true,
+        "guid": "6000000090000007919",
+        "name": "Nils Olsen Haugen",
+        "gender": "male",
+        "birth": {
+          "date": {
+            "year": 1752
+          }
+        },
+        "updated_at": "1763000000"
+      },
+      "markers": {}
+    },
+    {
+      "id": "6000000090000015838",
+      "parents": [],
+      "attributes": {
+        "id": "profile-990000074",
+        "profile_url": "https://www.geni.com/people/Ragnhild-Knutsdatter-Berg/6000000090000015838",
+        "public": true,
+        "guid": "6000000090000015838",
+        "name": "Ragnhild Knutsdatter Berg",
+        "gender": "female",
+        "birth": {
+          "date": {
+            "year": 1758
+          }
+        },
+        "updated_at": "1763000000"
+      },
+      "markers": {}
+    },
+    {
+      "id": "6000000090000023757",
+      "parents": [],
+      "attributes": {
+        "id": "profile-990000111",
+        "profile_url": "https://www.geni.com/people/Peder-Larsen-Bakke/6000000090000023757",
+        "public": true,
+        "guid": "6000000090000023757",
+        "name": "Peder Larsen Bakke",
+        "gender": "male",
+        "birth": {
+          "date": {
+            "year": 1760
+          }
+        },
+        "updated_at": "1763000000"
+      },
+      "markers": {}
+    },
+    {
+      "id": "6000000090000031676",
+      "parents": [],
+      "attributes": {
+        "id": "profile-990000148",
+        "profile_url": "https://www.geni.com/people/Anne-Iversdatter-Rud/6000000090000031676",
+        "public": true,
+        "guid": "6000000090000031676",
+        "name": "Anne Iversdatter Rud",
+        "gender": "female",
+        "birth": {
+          "date": {
+            "year": 1765
+          }
+        },
+        "updated_at": "1763000000"
+      },
+      "markers": {}
+    },
+    {
+      "id": "6000000090000039595",
+      "parents": [
+        "https://www.geni.com/api/profile-990000111",
+        "https://www.geni.com/api/profile-990000148"
+      ],
+      "attributes": {
+        "id": "profile-990000185",
+        "profile_url": "https://www.geni.com/people/Marte-Pedersdatter-Bakke/6000000090000039595",
+        "public": true,
+        "guid": "6000000090000039595",
+        "name": "Marte Pedersdatter Bakke",
+        "gender": "female",
+        "birth": {
+          "date": {
+            "year": 1784
+          }
+        },
+        "updated_at": "1763000000",
+        "father": "6000000090000023757",
+        "mother": "6000000090000031676"
+      },
+      "markers": {}
+    },
+    {
+      "id": "6000000090000047514",
+      "parents": [
+        "https://www.geni.com/api/profile-990000037",
+        "https://www.geni.com/api/profile-990000074"
+      ],
+      "attributes": {
+        "id": "profile-990000222",
+        "profile_url": "https://www.geni.com/people/Ole-Nilsen-Haugen/6000000090000047514",
+        "public": true,
+        "guid": "6000000090000047514",
+        "name": "Ole Nilsen Haugen",
+        "gender": "male",
+        "birth": {
+          "date": {
+            "year": 1780
+          }
+        },
+        "updated_at": "1763000000",
+        "father": "6000000090000007919",
+        "mother": "6000000090000015838"
+      },
+      "markers": {}
+    },
+    {
+      "id": "6000000090000055433",
+      "parents": [
+        "https://www.geni.com/api/profile-990000111",
+        "https://www.geni.com/api/profile-990000148"
+      ],
+      "attributes": {
+        "id": "profile-990000259",
+        "profile_url": "https://www.geni.com/people/Lars-Pedersen-Bakke/6000000090000055433",
+        "public": true,
+        "guid": "6000000090000055433",
+        "name": "Lars Pedersen Bakke",
+        "gender": "male",
+        "birth": {
+          "date": {
+            "year": 1795
+          }
+        },
+        "updated_at": "1763000000",
+        "father": "6000000090000023757",
+        "mother": "6000000090000031676"
+      },
+      "markers": {}
+    },
+    {
+      "id": "6000000090000063352",
+      "parents": [
+        "https://www.geni.com/api/profile-990000037",
+        "https://www.geni.com/api/profile-990000074"
+      ],
+      "attributes": {
+        "id": "profile-990000296",
+        "profile_url": "https://www.geni.com/people/Kirsti-Nilsdatter-Haugen/6000000090000063352",
+        "public": true,
+        "guid": "6000000090000063352",
+        "name": "Kirsti Nilsdatter Haugen",
+        "gender": "female",
+        "birth": {
+          "date": {
+            "year": 1785
+          }
+        },
+        "updated_at": "1763000000",
+        "father": "6000000090000007919",
+        "mother": "6000000090000015838"
+      },
+      "markers": {}
+    },
+    {
+      "id": "6000000090000071271",
+      "parents": [],
+      "attributes": {
+        "id": "profile-990000333",
+        "profile_url": "https://www.geni.com/people/Anders-Halvorsen-Lien/6000000090000071271",
+        "public": true,
+        "guid": "6000000090000071271",
+        "name": "Anders Halvorsen Lien",
+        "gender": "male",
+        "birth": {
+          "date": {
+            "year": 1781
+          }
+        },
+        "updated_at": "1763000000"
+      },
+      "markers": {}
+    },
+    {
+      "id": "6000000090000079190",
+      "parents": [
+        "https://www.geni.com/api/profile-990000037",
+        "https://www.geni.com/api/profile-990000074"
+      ],
+      "attributes": {
+        "id": "profile-990000370",
+        "profile_url": "https://www.geni.com/people/Siri-Nilsdatter-Haugen/6000000090000079190",
+        "public": true,
+        "guid": "6000000090000079190",
+        "name": "Siri Nilsdatter Haugen",
+        "gender": "female",
+        "birth": {
+          "date": {
+            "year": 1790
+          }
+        },
+        "updated_at": "1763000000",
+        "father": "6000000090000007919",
+        "mother": "6000000090000015838"
+      },
+      "markers": {}
+    },
+    {
+      "id": "6000000090000087109",
+      "parents": [],
+      "attributes": {
+        "id": "profile-990000407",
+        "profile_url": "https://www.geni.com/people/Hans-Eriksen-Moen/6000000090000087109",
+        "public": true,
+        "guid": "6000000090000087109",
+        "name": "Hans Eriksen Moen",
+        "gender": "male",
+        "birth": {
+          "date": {
+            "year": 1788
+          }
+        },
+        "updated_at": "1763000000"
+      },
+      "markers": {}
+    },
+    {
+      "id": "6000000090000095028",
+      "parents": [
+        "https://www.geni.com/api/profile-990000222",
+        "https://www.geni.com/api/profile-990000185"
+      ],
+      "attributes": {
+        "id": "profile-990000444",
+        "profile_url": "https://www.geni.com/people/Nils-Olsen-Haugen/6000000090000095028",
+        "public": true,
+        "guid": "6000000090000095028",
+        "name": "Nils Olsen Haugen",
+        "gender": "male",
+        "birth": {
+          "date": {
+            "year": 1808
+          }
+        },
+        "updated_at": "1763000000",
+        "father": "6000000090000047514",
+        "mother": "6000000090000039595"
+      },
+      "markers": {}
+    },
+    {
+      "id": "6000000090000102947",
+      "parents": [
+        "https://www.geni.com/api/profile-990000222",
+        "https://www.geni.com/api/profile-990000185"
+      ],
+      "attributes": {
+        "id": "profile-990000481",
+        "profile_url": "https://www.geni.com/people/Ragnhild-Olsdatter-Haugen/6000000090000102947",
+        "public": true,
+        "guid": "6000000090000102947",
+        "name": "Ragnhild Olsdatter Haugen",
+        "gender": "female",
+        "birth": {
+          "date": {
+            "year": 1815
+          }
+        },
+        "updated_at": "1763000000",
+        "father": "6000000090000047514",
+        "mother": "6000000090000039595"
+      },
+      "markers": {}
+    },
+    {
+      "id": "6000000090000110866",
+      "parents": [
+        "https://www.geni.com/api/profile-990000333",
+        "https://www.geni.com/api/profile-990000296"
+      ],
+      "attributes": {
+        "id": "profile-990000518",
+        "profile_url": "https://www.geni.com/people/Syver-Andersen-Lien/6000000090000110866",
+        "public": true,
+        "guid": "6000000090000110866",
+        "name": "Syver Andersen Lien",
+        "gender": "male",
+        "birth": {
+          "date": {
+            "year": 1812
+          }
+        },
+        "updated_at": "1763000000",
+        "father": "6000000090000071271",
+        "mother": "6000000090000063352"
+      },
+      "markers": {}
+    },
+    {
+      "id": "6000000090000118785",
+      "parents": ["https://www.geni.com/api/profile-990000259"],
+      "attributes": {
+        "id": "profile-990000555",
+        "profile_url": "https://www.geni.com/people/Kari-Larsdatter-Bakke/6000000090000118785",
+        "public": true,
+        "guid": "6000000090000118785",
+        "name": "Kari Larsdatter Bakke",
+        "gender": "female",
+        "birth": {
+          "date": {
+            "year": 1816
+          }
+        },
+        "updated_at": "1763000000",
+        "father": "6000000090000055433"
+      },
+      "markers": {}
+    },
+    {
+      "id": "6000000090000126704",
+      "parents": [
+        "https://www.geni.com/api/profile-990000407",
+        "https://www.geni.com/api/profile-990000370"
+      ],
+      "attributes": {
+        "id": "profile-990000592",
+        "profile_url": "https://www.geni.com/people/Marte-Hansdatter-Moen/6000000090000126704",
+        "public": true,
+        "guid": "6000000090000126704",
+        "name": "Marte Hansdatter Moen",
+        "gender": "female",
+        "birth": {
+          "date": {
+            "year": 1822
+          }
+        },
+        "updated_at": "1763000000",
+        "father": "6000000090000087109",
+        "mother": "6000000090000079190"
+      },
+      "markers": {}
+    },
+    {
+      "id": "6000000090000134623",
+      "parents": ["https://www.geni.com/api/profile-990000259"],
+      "attributes": {
+        "id": "profile-990000629",
+        "profile_url": "https://www.geni.com/people/Iver-Larsen-Bakke/6000000090000134623",
+        "public": true,
+        "guid": "6000000090000134623",
+        "name": "Iver Larsen Bakke",
+        "gender": "male",
+        "birth": {
+          "date": {
+            "year": 1820
+          }
+        },
+        "updated_at": "1763000000",
+        "father": "6000000090000055433"
+      },
+      "markers": {}
+    },
+    {
+      "id": "6000000090000142542",
+      "parents": ["https://www.geni.com/api/profile-990000444"],
+      "attributes": {
+        "id": "profile-990000666",
+        "profile_url": "https://www.geni.com/people/Ole-Nilsen-Haugen/6000000090000142542",
+        "public": true,
+        "guid": "6000000090000142542",
+        "name": "Ole Nilsen Haugen",
+        "gender": "male",
+        "birth": {
+          "date": {
+            "year": 1840
+          }
+        },
+        "updated_at": "1763000000",
+        "father": "6000000090000095028"
+      },
+      "markers": {}
+    },
+    {
+      "id": "6000000090000150461",
+      "parents": ["https://www.geni.com/api/profile-990000481"],
+      "attributes": {
+        "id": "profile-990000703",
+        "profile_url": "https://www.geni.com/people/Karen-Pedersdatter-Strand/6000000090000150461",
+        "public": true,
+        "guid": "6000000090000150461",
+        "name": "Karen Pedersdatter Strand",
+        "gender": "female",
+        "birth": {
+          "date": {
+            "year": 1845
+          }
+        },
+        "updated_at": "1763000000",
+        "mother": "6000000090000102947"
+      },
+      "markers": {}
+    },
+    {
+      "id": "6000000090000158380",
+      "parents": [
+        "https://www.geni.com/api/profile-990000518",
+        "https://www.geni.com/api/profile-990000555"
+      ],
+      "attributes": {
+        "id": "profile-990000740",
+        "profile_url": "https://www.geni.com/people/Hedda-Syversdatter-Lien/6000000090000158380",
+        "public": true,
+        "guid": "6000000090000158380",
+        "name": "Hedda Syversdatter Lien",
+        "gender": "female",
+        "birth": {
+          "date": {
+            "year": 1848
+          }
+        },
+        "updated_at": "1763000000",
+        "father": "6000000090000110866",
+        "mother": "6000000090000118785"
+      },
+      "markers": {}
+    },
+    {
+      "id": "6000000090000166299",
+      "parents": [
+        "https://www.geni.com/api/profile-990000629",
+        "https://www.geni.com/api/profile-990000592"
+      ],
+      "attributes": {
+        "id": "profile-990000777",
+        "profile_url": "https://www.geni.com/people/Anna-Iversdatter-Bakke/6000000090000166299",
+        "public": true,
+        "guid": "6000000090000166299",
+        "name": "Anna Iversdatter Bakke",
+        "gender": "female",
+        "birth": {
+          "date": {
+            "year": 1850
+          }
+        },
+        "updated_at": "1763000000",
+        "father": "6000000090000134623",
+        "mother": "6000000090000126704"
+      },
+      "markers": {}
+    },
+    {
+      "id": "6000000090000174218",
+      "parents": [
+        "https://www.geni.com/api/profile-990000629",
+        "https://www.geni.com/api/profile-990000592"
+      ],
+      "attributes": {
+        "id": "profile-990000814",
+        "profile_url": "https://www.geni.com/people/Hans-Iversen-Bakke/6000000090000174218",
+        "public": true,
+        "guid": "6000000090000174218",
+        "name": "Hans Iversen Bakke",
+        "gender": "male",
+        "birth": {
+          "date": {
+            "year": 1853
+          }
+        },
+        "updated_at": "1763000000",
+        "father": "6000000090000134623",
+        "mother": "6000000090000126704"
+      },
+      "markers": {}
+    },
+    {
+      "id": "6000000090000182137",
+      "parents": ["https://www.geni.com/api/profile-990000666"],
+      "attributes": {
+        "id": "profile-990000851",
+        "profile_url": "https://www.geni.com/people/Bastine-Olsdatter-Haugen/6000000090000182137",
+        "public": true,
+        "guid": "6000000090000182137",
+        "name": "Bastine Olsdatter Haugen",
+        "gender": "female",
+        "birth": {
+          "date": {
+            "year": 1872
+          }
+        },
+        "updated_at": "1763000000",
+        "father": "6000000090000142542"
+      },
+      "markers": {}
+    },
+    {
+      "id": "6000000090000190056",
+      "parents": ["https://www.geni.com/api/profile-990000703"],
+      "attributes": {
+        "id": "profile-990000888",
+        "profile_url": "https://www.geni.com/people/Kristian-Johansen-Strand/6000000090000190056",
+        "public": true,
+        "guid": "6000000090000190056",
+        "name": "Kristian Johansen Strand",
+        "gender": "male",
+        "birth": {
+          "date": {
+            "year": 1878
+          }
+        },
+        "updated_at": "1763000000",
+        "mother": "6000000090000150461"
+      },
+      "markers": {}
+    },
+    {
+      "id": "6000000090000197975",
+      "parents": ["https://www.geni.com/api/profile-990000740"],
+      "attributes": {
+        "id": "profile-990000925",
+        "profile_url": "https://www.geni.com/people/Hilda-Kristoffersdatter-Vik/6000000090000197975",
+        "public": true,
+        "guid": "6000000090000197975",
+        "name": "Hilda Kristoffersdatter Vik",
+        "gender": "female",
+        "birth": {
+          "date": {
+            "year": 1880
+          }
+        },
+        "updated_at": "1763000000",
+        "mother": "6000000090000158380"
+      },
+      "markers": {}
+    },
+    {
+      "id": "6000000090000205894",
+      "parents": ["https://www.geni.com/api/profile-990000777"],
+      "attributes": {
+        "id": "profile-990000962",
+        "profile_url": "https://www.geni.com/people/Ingrid-Pedersdatter-Lund/6000000090000205894",
+        "public": true,
+        "guid": "6000000090000205894",
+        "name": "Ingrid Pedersdatter Lund",
+        "gender": "female",
+        "birth": {
+          "date": {
+            "year": 1882
+          }
+        },
+        "updated_at": "1763000000",
+        "mother": "6000000090000166299"
+      },
+      "markers": {}
+    },
+    {
+      "id": "6000000090000213813",
+      "parents": ["https://www.geni.com/api/profile-990000814"],
+      "attributes": {
+        "id": "profile-990000999",
+        "profile_url": "https://www.geni.com/people/Emilie-Hansdatter-Bakke/6000000090000213813",
+        "public": true,
+        "guid": "6000000090000213813",
+        "name": "Emilie Hansdatter Bakke",
+        "gender": "female",
+        "birth": {
+          "date": {
+            "year": 1886
+          }
+        },
+        "updated_at": "1763000000",
+        "father": "6000000090000174218"
+      },
+      "markers": {}
+    },
+    {
+      "id": "6000000090000221732",
+      "parents": ["https://www.geni.com/api/profile-990000851"],
+      "attributes": {
+        "id": "profile-990001036",
+        "profile_url": "https://www.geni.com/people/Anna-Larsen/6000000090000221732",
+        "public": true,
+        "guid": "6000000090000221732",
+        "name": "Anna Larsen",
+        "gender": "female",
+        "birth": {
+          "date": {
+            "year": 1906
+          }
+        },
+        "updated_at": "1763000000",
+        "mother": "6000000090000182137"
+      },
+      "markers": {}
+    },
+    {
+      "id": "6000000090000229651",
+      "parents": ["https://www.geni.com/api/profile-990000888"],
+      "attributes": {
+        "id": "profile-990001073",
+        "profile_url": "https://www.geni.com/people/Orvin-Kristiansen-Strand/6000000090000229651",
+        "public": true,
+        "guid": "6000000090000229651",
+        "name": "Orvin Kristiansen Strand",
+        "gender": "male",
+        "birth": {
+          "date": {
+            "year": 1910
+          }
+        },
+        "updated_at": "1763000000",
+        "father": "6000000090000190056"
+      },
+      "markers": {}
+    },
+    {
+      "id": "6000000090000237570",
+      "parents": ["https://www.geni.com/api/profile-990000925"],
+      "attributes": {
+        "id": "profile-990001110",
+        "profile_url": "https://www.geni.com/people/Karsten-Eide/6000000090000237570",
+        "public": true,
+        "guid": "6000000090000237570",
+        "name": "Karsten Eide",
+        "gender": "male",
+        "birth": {
+          "date": {
+            "year": 1908
+          }
+        },
+        "updated_at": "1763000000",
+        "mother": "6000000090000197975"
+      },
+      "markers": {}
+    },
+    {
+      "id": "6000000090000245489",
+      "parents": ["https://www.geni.com/api/profile-990000962"],
+      "attributes": {
+        "id": "profile-990001147",
+        "profile_url": "https://www.geni.com/people/Marius-Lund/6000000090000245489",
+        "public": true,
+        "guid": "6000000090000245489",
+        "name": "Marius Lund",
+        "gender": "male",
+        "birth": {
+          "date": {
+            "year": 1912
+          }
+        },
+        "updated_at": "1763000000",
+        "mother": "6000000090000205894"
+      },
+      "markers": {}
+    },
+    {
+      "id": "6000000090000253408",
+      "parents": ["https://www.geni.com/api/profile-990000999"],
+      "attributes": {
+        "id": "profile-990001184",
+        "profile_url": "https://www.geni.com/people/Maren-Saetre/6000000090000253408",
+        "public": true,
+        "guid": "6000000090000253408",
+        "name": "Maren Sætre",
+        "gender": "female",
+        "birth": {
+          "date": {
+            "year": 1915
+          }
+        },
+        "updated_at": "1763000000",
+        "mother": "6000000090000213813"
+      },
+      "markers": {}
+    },
+    {
+      "id": "6000000090000261327",
+      "parents": ["https://www.geni.com/api/profile-990001036"],
+      "attributes": {
+        "id": "profile-990001221",
+        "profile_url": "https://www.geni.com/people/Tove-Larsen-Haug/6000000090000261327",
+        "public": false,
+        "guid": "6000000090000261327",
+        "name": "Tove Larsen Haug",
+        "gender": "female",
+        "birth": {
+          "date": {
+            "year": 1938
+          }
+        },
+        "updated_at": "1763000000",
+        "mother": "6000000090000221732"
+      },
+      "markers": {}
+    },
+    {
+      "id": "6000000090000269246",
+      "parents": ["https://www.geni.com/api/profile-990001073"],
+      "attributes": {
+        "id": "profile-990001258",
+        "profile_url": "https://www.geni.com/people/Erik-Strand/6000000090000269246",
+        "public": false,
+        "guid": "6000000090000269246",
+        "name": "Erik Strand",
+        "gender": "male",
+        "birth": {
+          "date": {
+            "year": 1945
+          }
+        },
+        "updated_at": "1763000000",
+        "father": "6000000090000229651"
+      },
+      "markers": {}
+    },
+    {
+      "id": "6000000090000277165",
+      "parents": ["https://www.geni.com/api/profile-990001110"],
+      "attributes": {
+        "id": "profile-990001295",
+        "profile_url": "https://www.geni.com/people/Astrid-Eide-Jensen/6000000090000277165",
+        "public": false,
+        "guid": "6000000090000277165",
+        "name": "Astrid Eide Jensen",
+        "gender": "female",
+        "birth": {
+          "date": {
+            "year": 1942
+          }
+        },
+        "updated_at": "1763000000",
+        "father": "6000000090000237570"
+      },
+      "markers": {}
+    },
+    {
+      "id": "6000000090000285084",
+      "parents": ["https://www.geni.com/api/profile-990001147"],
+      "attributes": {
+        "id": "profile-990001332",
+        "profile_url": "https://www.geni.com/people/Dag-Lund/6000000090000285084",
+        "public": false,
+        "guid": "6000000090000285084",
+        "name": "Dag Lund",
+        "gender": "male",
+        "birth": {
+          "date": {
+            "year": 1948
+          }
+        },
+        "updated_at": "1763000000",
+        "father": "6000000090000245489"
+      },
+      "markers": {}
+    },
+    {
+      "id": "6000000090000293003",
+      "parents": ["https://www.geni.com/api/profile-990001184"],
+      "attributes": {
+        "id": "profile-990001369",
+        "profile_url": "https://www.geni.com/people/Liv-Saetre-Nordby/6000000090000293003",
+        "public": false,
+        "guid": "6000000090000293003",
+        "name": "Liv Sætre Nordby",
+        "gender": "female",
+        "birth": {
+          "date": {
+            "year": 1950
+          }
+        },
+        "updated_at": "1763000000",
+        "mother": "6000000090000253408"
+      },
+      "markers": {}
+    }
+  ]
+}
