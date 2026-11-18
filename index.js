@@ -442,6 +442,9 @@ function profileMenu(profile) {
   const rebuild = document.createElement('option');
   rebuild.value = 'rebuild';
   rebuild.textContent = 'Rebuild tree';
+  const extend = document.createElement('option');
+  extend.value = 'extend';
+  extend.textContent = 'Extend tree';
   const findPaths = document.createElement('option');
   findPaths.value = 'find-paths';
   findPaths.textContent = 'Find paths to other profiles';
@@ -450,13 +453,15 @@ function profileMenu(profile) {
   exclude.textContent = excludedProfileIds.has(profile.id())
     ? 'Include in matching'
     : 'Exclude from matching';
-  select.append(title, remove, rebuild, findPaths, exclude);
+  select.append(title, remove, extend, rebuild, findPaths, exclude);
   select.addEventListener('change', () => {
     if (select.value !== '') {
       startUserOperation();
     }
     if (select.value === 'remove') {
       removeFromProfileList(profile);
+    } else if (select.value === 'extend') {
+      extendTree(profile);
     } else if (select.value === 'rebuild') {
       rebuildTree(profile);
     } else if (select.value === 'find-paths') {
@@ -793,9 +798,10 @@ async function buildTree(yearLimit) {
 const fewAncestors = 4;
 const extraGenerations = 2;
 
-// Fetch extraGenerations of ancestors for person, regardless of the
-// "back to" year limit, and recalculate the groups.
-async function fetchMoreAncestors(person) {
+// Fetch ancestors of person that are not in the database yet, back to
+// yearLimit and at most generations generations, and recalculate the
+// groups. Profiles already fetched are not fetched again.
+async function fetchAncestors(person, yearLimit, generations = Infinity) {
   startTreeBuild();
   try {
     if (!client.connected) {
@@ -803,12 +809,7 @@ async function fetchMoreAncestors(person) {
     }
     addProfileMessage.innerText =
       'Fetching ancestors of ' + displayName(person);
-    await treeBuilder.buildTreeForPerson(
-      person,
-      2025,
-      -Infinity,
-      extraGenerations,
-    );
+    await treeBuilder.buildTreeForPerson(person, 2025, yearLimit, generations);
     buildAncestorGroups();
     addProfileMessage.innerText = treeBuildingResult(person);
   } catch (error) {
@@ -819,6 +820,18 @@ async function fetchMoreAncestors(person) {
   } finally {
     finishTreeBuild();
   }
+}
+
+// Fetch extraGenerations of ancestors for person, regardless of the
+// "back to" year limit.
+function fetchMoreAncestors(person) {
+  return fetchAncestors(person, -Infinity, extraGenerations);
+}
+
+// Fetch new ancestors of person back to the "back to" year limit, the
+// way the Build tree button does for the whole group.
+function extendTree(person) {
+  return fetchAncestors(person, Number(yearLimitElement.value));
 }
 
 // Fetch person and all ancestors back to the "back to" year limit again,
