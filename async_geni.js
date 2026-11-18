@@ -12,6 +12,12 @@ const profileParams = { fields: profileFields.join(',') };
 // is exceeded, in milliseconds.
 const rateLimitRetryDelay = 5000;
 
+// The keys under which the Geni login is kept in the token storage
+// given to GeniClient (normally sessionStorage), so that it survives
+// reloading the page.
+const accessTokenKey = 'geniAccessToken';
+const refreshTokenKey = 'geniRefreshToken';
+
 class GeniOperation {
   constructor(operation, args, resolve, reject, onCallbackError) {
     this.operation = operation;
@@ -26,8 +32,9 @@ class GeniOperation {
   // Run the operation. Calls done with 'rateLimited' when Geni says the
   // rate limit is exceeded, in which case the operation should be run
   // again later. Otherwise the operation is resolved or rejected, and
-  // done is called with 'answered' if Geni answered, or 'failed' if the
-  // call to Geni threw.
+  // done is called with 'unauthorized' if Geni did not accept the access
+  // token, 'answered' if Geni answered otherwise, or 'failed' if the call
+  // to Geni threw.
   execute(done) {
     try {
       // Geni modifies the args argument, so clone it.
@@ -47,6 +54,10 @@ class GeniOperation {
               return;
             }
             this.reject(data.error);
+            if (data.error.type == 'OAuthException') {
+              done('unauthorized');
+              return;
+            }
           } else {
             this.resolve(data);
           }
@@ -81,20 +92,69 @@ class GeniClient {
   #retryTimer;
   // True after stop(), until start().
   #stopped = false;
+  // Where the login is kept between page loads, or undefined.
+  #tokenStorage;
 
-  constructor(appId) {
-    this.connected = false;
+  // tokenStorage, if given, is a Storage object (normally sessionStorage)
+  // that keeps the Geni login, so that a reloaded page is still logged
+  // in. The client starts as connected if it holds a login.
+  constructor(appId, tokenStorage = undefined) {
+    this.#tokenStorage = tokenStorage;
+    const accessToken = tokenStorage?.getItem(accessTokenKey);
+    const refreshToken = tokenStorage?.getItem(refreshTokenKey);
+    this.connected = Boolean(accessToken);
     this.#operationQueue = [];
     // Called with the number of queued operations, and whether the
     // connection is waiting for the Geni rate limit.
     this.queueSizeView = (number, waiting) => {};
     // Called when processing Geni's response callback throws.
     this.onCallbackError = () => {};
+    // Called when Geni no longer accepts the login. The client is then
+    // not connected, and fetching is stopped.
+    this.onLoggedOut = () => {};
     Geni.init({
       app_id: appId,
-      cookie: true,
       logging: false,
+      ...(accessToken ? { access_token: accessToken } : {}),
+      ...(refreshToken ? { refresh_token: refreshToken } : {}),
     });
+  }
+
+  // Keep the SDK's current login in the token storage. The SDK replaces
+  // the access token when it refreshes it with the refresh token.
+  #rememberLogin() {
+    const storage = this.#tokenStorage;
+    if (!storage) {
+      return;
+    }
+    for (const [key, value] of [
+      [accessTokenKey, Geni._access_token],
+      [refreshTokenKey, Geni._refresh_token],
+    ]) {
+      if (value) {
+        if (storage.getItem(key) !== value) {
+          storage.setItem(key, value);
+        }
+      } else {
+        storage.removeItem(key);
+      }
+    }
+  }
+
+  // Geni did not accept the access token, and the SDK could not refresh
+  // it: forget the login and stop fetching.
+  #loggedOut() {
+    console.log('Geni no longer accepts the login');
+    this.connected = false;
+    // The SDK only clears its access token itself the first time it
+    // tries to refresh it, so clear it here, or connect would not ask
+    // for a new login.
+    Geni._access_token = null;
+    Geni._refresh_token = null;
+    this.#tokenStorage?.removeItem(accessTokenKey);
+    this.#tokenStorage?.removeItem(refreshTokenKey);
+    this.stop();
+    this.onLoggedOut();
   }
 
   // Add an operation to the queue, starting it at once if nothing
@@ -115,6 +175,11 @@ class GeniClient {
   // When rate limited, run it again after a delay.
   #execute(op) {
     op.execute((outcome) => {
+      if (outcome === 'unauthorized') {
+        this.#operationQueue.shift();
+        this.#loggedOut();
+        return;
+      }
       if (outcome === 'rateLimited') {
         this.#rateLimited = true;
         this.#retryTimer = setTimeout(() => {
@@ -124,6 +189,7 @@ class GeniClient {
       } else {
         if (outcome === 'answered') {
           this.#rateLimited = false;
+          this.#rememberLogin();
         }
         this.#operationQueue.shift();
         if (this.#operationQueue.length > 0) {
@@ -170,9 +236,14 @@ class GeniClient {
         resolve();
       } else {
         Geni.connect((response) => {
-          if (response?.status == 'authorized') {
+          // Without an answer if the SDK already had an access token.
+          if (
+            response?.status == 'authorized' ||
+            (response === undefined && Geni._access_token)
+          ) {
             console.log('Geni connected');
             this.connected = true;
+            this.#rememberLogin();
             resolve();
           } else {
             console.log('Geni connection failed:', response);

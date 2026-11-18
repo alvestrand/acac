@@ -1,6 +1,7 @@
 import { jest } from '@jest/globals';
 import { GeniClient } from './async_geni.js';
 import { profileFields } from './geni_structures.js';
+import { FakeStorage } from './fake_storage.js';
 
 // A fake Geni SDK. Each test sets apiHandler to control how Geni.api responds.
 let apiHandler;
@@ -334,5 +335,89 @@ test('stop cancels a pending rate limit retry', async () => {
   client.stop();
   await expect(promise).rejects.toThrow('Fetching stopped');
   jest.advanceTimersByTime(10000);
+  expect(Geni.api).toHaveBeenCalledTimes(1);
+});
+
+// Keeping the login in the token storage
+
+test('A stored login is given to Geni and makes the client connected', () => {
+  const storage = new FakeStorage();
+  storage.setItem('geniAccessToken', 'access');
+  storage.setItem('geniRefreshToken', 'refresh');
+  const client = new GeniClient('app', storage);
+  expect(Geni.init).toHaveBeenCalledWith({
+    app_id: 'app',
+    logging: false,
+    access_token: 'access',
+    refresh_token: 'refresh',
+  });
+  expect(client.connected).toBe(true);
+});
+
+test('Without a stored login the client is not connected', () => {
+  const client = new GeniClient('app', new FakeStorage());
+  expect(Geni.init).toHaveBeenCalledWith({ app_id: 'app', logging: false });
+  expect(client.connected).toBe(false);
+});
+
+test('connect stores the login', async () => {
+  Geni.connect.mockImplementation((cb) => {
+    Geni._access_token = 'access';
+    Geni._refresh_token = 'refresh';
+    cb({ status: 'authorized' });
+  });
+  const storage = new FakeStorage();
+  const client = new GeniClient('app', storage);
+  await client.connect();
+  expect(storage.getItem('geniAccessToken')).toBe('access');
+  expect(storage.getItem('geniRefreshToken')).toBe('refresh');
+});
+
+test('connect resolves without an answer when Geni already has a token', async () => {
+  Geni._access_token = 'access';
+  Geni.connect.mockImplementation((cb) => cb());
+  const storage = new FakeStorage();
+  const client = new GeniClient('app', storage);
+  await client.connect();
+  expect(client.connected).toBe(true);
+  expect(storage.getItem('geniAccessToken')).toBe('access');
+  expect(storage.getItem('geniRefreshToken')).toBeNull();
+});
+
+test('A token refreshed by the SDK is stored after the answer', async () => {
+  const storage = new FakeStorage();
+  storage.setItem('geniAccessToken', 'old');
+  apiHandler = (operation, args, callback) => {
+    Geni._access_token = 'new';
+    callback({ id: 'profile-1' });
+  };
+  const client = new GeniClient('app', storage);
+  await client.getPerson('1');
+  expect(storage.getItem('geniAccessToken')).toBe('new');
+});
+
+test('A rejected login is forgotten and stops fetching', async () => {
+  const storage = new FakeStorage();
+  storage.setItem('geniAccessToken', 'expired');
+  storage.setItem('geniRefreshToken', 'refresh');
+  Geni._access_token = 'expired';
+  Geni._refresh_token = 'refresh';
+  const error = { type: 'OAuthException', message: 'Invalid access token' };
+  const pending = [];
+  apiHandler = (operation, args, callback) => pending.push(callback);
+  const client = new GeniClient('app', storage);
+  client.onLoggedOut = jest.fn();
+  const first = client.getPerson('1');
+  const second = client.getPerson('2');
+  pending[0]({ error });
+
+  await expect(first).rejects.toEqual(error);
+  await expect(second).rejects.toThrow('Fetching stopped');
+  expect(client.connected).toBe(false);
+  expect(client.stopped).toBe(true);
+  expect(client.onLoggedOut).toHaveBeenCalledTimes(1);
+  expect(storage.length).toBe(0);
+  expect(Geni._access_token).toBeNull();
+  expect(Geni._refresh_token).toBeNull();
   expect(Geni.api).toHaveBeenCalledTimes(1);
 });

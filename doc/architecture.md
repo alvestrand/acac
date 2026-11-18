@@ -20,7 +20,13 @@ touching the DOM, so those calculations can be tested separately.
 
 - `async_geni.js`: `GeniClient` serializes API operations through one
   queue, retries Geni rate-limit responses after five seconds, and
-  supports stopping and restarting fetches.
+  supports stopping and restarting fetches. It keeps the Geni access
+  and refresh tokens in the storage it is given (sessionStorage in
+  `index.js`) and passes them to `Geni.init`, so a reloaded or
+  duplicated tab stays logged in while a new tab logs in for itself.
+  When Geni answers an `OAuthException` that the SDK could not cure by
+  refreshing the token, the client forgets the login, stops fetching,
+  and calls `onLoggedOut`.
 - `tree_builder.js`: `TreeBuilder` fetches profiles to add, builds
   ancestors to a year or generation limit, and refreshes trees through
   a shared pool so shared ancestors are refreshed once. It follows
@@ -107,6 +113,16 @@ Geni behavior changes:
   stop fetching for inspection.
 - `profile?ids=a,b,c` and `/union` with `{ids: [...]}` support
   batching; the maximum batch size has not been established.
+- In `jsdk.js`, cookie storage of the token is switched on with the
+  option `cookies`, not `cookie`, and `init` reads the token cookie
+  before it switches cookie support on, so the SDK cannot restore a
+  login from its cookie. `init` accepts `access_token` and
+  `refresh_token` instead. `Geni.connect` calls back with no answer if
+  the SDK already has a token. On an `OAuthException` the SDK tries
+  once to refresh the token, and only clears its token that first
+  time. What Geni answers for an expired token, and how long tokens
+  last, has not been observed; a made-up token gives `OAuthException`
+  "Invalid access token".
 - Rate-limit responses include `X-API-Rate-Limit`,
   `X-API-Rate-Remaining`, and `X-API-Rate-Window`. Parallel requests
   do not improve throughput.

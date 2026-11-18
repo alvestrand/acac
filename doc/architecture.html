@@ -193,7 +193,14 @@ touching the DOM, so those calculations can be tested separately.</p>
 <ul>
 <li><code>async_geni.js</code>: <code>GeniClient</code> serializes API
 operations through one queue, retries Geni rate-limit responses after
-five seconds, and supports stopping and restarting fetches.</li>
+five seconds, and supports stopping and restarting fetches. It keeps the
+Geni access and refresh tokens in the storage it is given
+(sessionStorage in <code>index.js</code>) and passes them to
+<code>Geni.init</code>, so a reloaded or duplicated tab stays logged in
+while a new tab logs in for itself. When Geni answers an
+<code>OAuthException</code> that the SDK could not cure by refreshing
+the token, the client forgets the login, stops fetching, and calls
+<code>onLoggedOut</code>.</li>
 <li><code>tree_builder.js</code>: <code>TreeBuilder</code> fetches
 profiles to add, builds ancestors to a year or generation limit, and
 refreshes trees through a shared pool so shared ancestors are refreshed
@@ -287,6 +294,17 @@ answers stop fetching for inspection.</li>
 <li><code>profile?ids=a,b,c</code> and <code>/union</code> with
 <code>{ids: [...]}</code> support batching; the maximum batch size has
 not been established.</li>
+<li>In <code>jsdk.js</code>, cookie storage of the token is switched on
+with the option <code>cookies</code>, not <code>cookie</code>, and
+<code>init</code> reads the token cookie before it switches cookie
+support on, so the SDK cannot restore a login from its cookie.
+<code>init</code> accepts <code>access_token</code> and
+<code>refresh_token</code> instead. <code>Geni.connect</code> calls back
+with no answer if the SDK already has a token. On an
+<code>OAuthException</code> the SDK tries once to refresh the token, and
+only clears its token that first time. What Geni answers for an expired
+token, and how long tokens last, has not been observed; a made-up token
+gives <code>OAuthException</code> “Invalid access token”.</li>
 <li>Rate-limit responses include <code>X-API-Rate-Limit</code>,
 <code>X-API-Rate-Remaining</code>, and <code>X-API-Rate-Window</code>.
 Parallel requests do not improve throughput.</li>
