@@ -111,12 +111,16 @@ try {
   console.log('Fetching Geni API threw, error ', err);
   showErrorMessage('Install error: Geni API key missing', true);
 }
+// The Geni login is kept in sessionStorage, so that it survives
+// reloading the tab, but each new tab logs in for itself.
+const client = new GeniClient(geniAppId, sessionStorage);
 // Don't hide an install error behind the login status.
-if (errorMessageElement.hidden) {
+if (errorMessageElement.hidden && !client.connected) {
   showErrorMessage('Not logged in', true);
 }
-
-const client = new GeniClient(geniAppId);
+client.onLoggedOut = () => {
+  showErrorMessage('Not logged in', true);
+};
 client.onCallbackError = (error, operation) => {
   reportSurprise(
     'Geni callback error',
