@@ -36,7 +36,7 @@ db.sizeView = (number) => {
 async function saveDatabaseSnapshot() {
   const additionsAtStart = profileAdditionCount;
   saveCurrentGroupState();
-  const result = await databaseFile.save(db);
+  const result = await databaseFile.save(db, currentGroup);
   // Profiles added by the merge are in the file, so they need no save.
   savedProfileAdditionCount = additionsAtStart + result.added;
   if (result.merged) {
@@ -231,7 +231,8 @@ const initialsOnlyElement = document.getElementById('initials-only');
 // Groups of profiles, saved in the database file.
 const groupStore = databaseFile.groupStore;
 // Name of the group currently being worked on. Each tab has its own,
-// remembered in localStorage for the next time the page is opened.
+// remembered in sessionStorage for when the tab is reloaded. A new tab
+// starts with the current group saved in the database file.
 let currentGroup = '';
 const currentGroupKey = 'currentSet';
 
@@ -250,7 +251,7 @@ function displayGroupSelect() {
 
 function selectGroup(name) {
   currentGroup = name;
-  localStorage.setItem(currentGroupKey, name);
+  sessionStorage.setItem(currentGroupKey, name);
   closeGroupBoxes();
   displayGroupSelect();
   groupNotesElement.value = groupStore.notes(name);
@@ -285,17 +286,14 @@ function saveCurrentGroupState() {
   groupStore.saveExcluded(currentGroup, currentExcludedIds());
 }
 
-// Save the database and the current group, then switch to another group
-// and recalculate its ancestor groups.
+// Switch to another group and recalculate its ancestor groups, then
+// save the database, so that the file has both the state of the group
+// left and the new current group.
 async function switchToGroup(name) {
-  await saveDatabaseSnapshot();
-  groupStore.saveMembers(
-    currentGroup,
-    currentProfileIds(),
-    currentExcludedIds(),
-  );
+  saveCurrentGroupState();
   selectGroup(name);
   buildAncestorGroups();
+  await saveDatabaseSnapshot();
 }
 
 async function createNewGroup() {
@@ -360,16 +358,18 @@ function loadProfileList() {
   displayProfileList();
 }
 
-// The "Show initials only" setting is remembered in localStorage under
-// this key.
+// Settings are remembered in sessionStorage, so that each tab has its
+// own and a new tab starts with the defaults. Only saving the database
+// file affects other tabs.
+
+// The "Show initials only" setting is remembered under this key.
 const initialsOnlyKey = 'initialsOnly';
 
-// The year limit for grouping ancestors is remembered in localStorage
-// under this key.
+// The year limit for grouping ancestors is remembered under this key.
 const groupingYearLimitKey = 'groupingYearLimit';
 
-// The "Show" choice (no path, path or tree) is remembered in
-// localStorage under this key.
+// The "Show" choice (no path, path or tree) is remembered under this
+// key.
 const displayPathKey = 'displayPath';
 
 // The name of person as shown on the page (see display.displayName).
@@ -975,7 +975,7 @@ function ancestorCount(person) {
 
 // Grouping algorithm menu ==========================================
 
-// The chosen algorithm is remembered in localStorage under this key.
+// The chosen algorithm is remembered in sessionStorage under this key.
 const algorithmKey = 'groupingAlgorithm';
 
 function displayAlgorithmSelect() {
@@ -985,7 +985,7 @@ function displayAlgorithmSelect() {
     option.textContent = display.algorithmLabel(name);
     algorithmSelectElement.append(option);
   }
-  const stored = localStorage.getItem(algorithmKey);
+  const stored = sessionStorage.getItem(algorithmKey);
   algorithmSelectElement.value = Object.hasOwn(groupingAlgorithms, stored)
     ? stored
     : 'sharedAncestors';
@@ -1256,17 +1256,13 @@ async function loadGroupFromFile(file) {
     return;
   }
   const result = mergeGroupImport(imported, db);
-  await saveDatabaseSnapshot();
-  groupStore.saveMembers(
-    currentGroup,
-    currentProfileIds(),
-    currentExcludedIds(),
-  );
+  saveCurrentGroupState();
   groupStore.save(groupName, result.ids);
   groupStore.saveNotes(groupName, imported.notes ?? '');
   groupStore.saveExcluded(groupName, result.excluded);
   selectGroup(groupName);
   buildAncestorGroups();
+  await saveDatabaseSnapshot();
   groupFileMessage.innerText =
     `Loaded ${imported.persons.length} profiles ` +
     `(${result.ids.length} members and their ancestors): ` +
@@ -1292,10 +1288,12 @@ async function importFromFile(file) {
   ) {
     return;
   }
+  // The current group as shown on the page is replaced too, so it is
+  // selected before saving.
   const importedGroup = applyImport(imported, db, groupStore);
-  await saveDatabaseSnapshot();
   selectGroup(importedGroup);
   buildAncestorGroups();
+  await saveDatabaseSnapshot();
 }
 
 // Binding actions to buttons ======================================
@@ -1563,26 +1561,26 @@ updatePartialProfilesButton.addEventListener('click', () => {
 });
 
 initialsOnlyElement.addEventListener('change', () => {
-  localStorage.setItem(initialsOnlyKey, initialsOnlyElement.checked);
+  sessionStorage.setItem(initialsOnlyKey, initialsOnlyElement.checked);
   displayProfileList();
   displayAncestorGroups();
 });
 
 algorithmSelectElement.addEventListener('change', () => {
   startUserOperation();
-  localStorage.setItem(algorithmKey, algorithmSelectElement.value);
+  sessionStorage.setItem(algorithmKey, algorithmSelectElement.value);
   buildAncestorGroups();
 });
 
 // The ancestor sets do not change with the limit, so only regroup.
 groupingYearLimitElement.addEventListener('input', () => {
-  localStorage.setItem(groupingYearLimitKey, groupingYearLimitElement.value);
+  sessionStorage.setItem(groupingYearLimitKey, groupingYearLimitElement.value);
   groupingYearLimitValueElement.textContent = groupingYearLimitElement.value;
   regroupProfiles();
 });
 
 displayPathElement.addEventListener('change', () => {
-  localStorage.setItem(displayPathKey, displayPathElement.value);
+  sessionStorage.setItem(displayPathKey, displayPathElement.value);
   displayAncestorGroups();
 });
 
@@ -1593,11 +1591,12 @@ profileAdditionCount = 0;
 savedProfileAdditionCount = 0;
 console.log('Database size', db.size());
 displayAlgorithmSelect();
-initialsOnlyElement.checked = localStorage.getItem(initialsOnlyKey) === 'true';
+initialsOnlyElement.checked =
+  sessionStorage.getItem(initialsOnlyKey) === 'true';
 // The slider keeps a stored year within its range and steps; a stored
 // value that is not a number is ignored, as the slider would otherwise
 // go to the middle.
-const storedGroupingYearLimit = localStorage.getItem(groupingYearLimitKey);
+const storedGroupingYearLimit = sessionStorage.getItem(groupingYearLimitKey);
 if (
   storedGroupingYearLimit !== null &&
   Number.isFinite(Number(storedGroupingYearLimit))
@@ -1605,7 +1604,7 @@ if (
   groupingYearLimitElement.value = storedGroupingYearLimit;
   groupingYearLimitValueElement.textContent = groupingYearLimitElement.value;
 }
-const storedDisplayPath = localStorage.getItem(displayPathKey);
+const storedDisplayPath = sessionStorage.getItem(displayPathKey);
 // Ignore a stored value that is no longer one of the choices.
 if (
   [...displayPathElement.options].some(
@@ -1614,7 +1613,15 @@ if (
 ) {
   displayPathElement.value = storedDisplayPath;
 }
-selectGroup(localStorage.getItem(currentGroupKey) ?? '');
+// A reloaded tab keeps its group; a new tab takes the one saved in the
+// database file, if that group still exists.
+const storedCurrentGroup = databaseFile.storedCurrentGroup;
+selectGroup(
+  sessionStorage.getItem(currentGroupKey) ??
+    (storedCurrentGroup !== undefined && groupStore.has(storedCurrentGroup)
+      ? storedCurrentGroup
+      : ''),
+);
 buildAncestorGroups();
 if (groupsMigrated) {
   // The groups were taken from local storage; save them in the file.

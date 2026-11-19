@@ -234,7 +234,8 @@ notes texts are kept, separated by <code>\n---\n</code>, when both tabs
 changed them. <code>readStoredGroups</code> reads the groups that older
 versions kept in localStorage. The name of the current group is not part
 of the groups: each tab keeps its own in <code>index.js</code>,
-remembered in localStorage.</li>
+remembered in sessionStorage, and a new tab starts with the one in the
+database file (see <code>opfsdb.js</code>).</li>
 <li><code>file_export.js</code>: whole-database and group export/import.
 When merging records, newer Geni <code>updated_at</code> data replaces
 older attributes while parent links from either record are
@@ -246,14 +247,24 @@ If the stored version is higher than the one the tab last loaded or
 saved, another tab has saved, and the stored data is merged into the
 tab’s (<code>Database.mergeFrom</code>, <code>mergeGroups</code>) before
 saving. Saves run under a Web Lock. A file with no <code>groups</code>
-is migrated from localStorage. Deleting profiles is not merged: a
-removed profile comes back from another tab’s file.</li>
+is migrated from localStorage. Each save also stores the saving tab’s
+current group, which a new tab starts with; files from older versions
+have none, and the old <code>currentSet</code> key in localStorage is
+read instead. localStorage is only read. The page’s display settings
+(initials only, grouping algorithm and year limit, “Show”) are kept per
+tab in sessionStorage, so saving the file is the only change that
+reaches other tabs. Deleting profiles is not merged: a removed profile
+comes back from another tab’s file.</li>
 <li><code>fake_opfs.js</code>: in-memory fakes of the file system
 directory and Web Locks, used by <code>opfsdb.test.js</code>.</li>
 <li><code>fake_geni_client.js</code>: an in-memory Geni API fake used by
 <code>tree_builder.test.js</code>.</li>
 <li><code>tools/count_groups.js</code>: manually compares grouping
 algorithms on a saved database.</li>
+<li><code>tools/make_screenshots.js</code>: regenerates the ACAC
+screenshots in <code>doc/</code> by loading the invented family in
+<code>tools/sample-group.json</code> into the page in headless Chrome
+(see “Updating the Documentation” in <code>AGENTS.md</code>).</li>
 </ul>
 <h2 id="tree-building-and-path-search">Tree Building and Path
 Search</h2>

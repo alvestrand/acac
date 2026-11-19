@@ -81,8 +81,7 @@
     <script type="module">
       import { isolateId, profileFields } from './geni_structures.js';
       import { Database } from './database.js';
-      import { loadDatabase } from './opfsdb.js';
-      import { GroupStore } from './groups.js';
+      import { DatabaseFile } from './opfsdb.js';
 
       const pathElement = document.getElementById('path');
       const paramsElement = document.getElementById('params');
@@ -93,12 +92,15 @@
         'database-group-members',
       );
 
+      // The database and the groups are read from the main page's
+      // database file. This page never saves it.
       const database = new Database();
-      const groupStore = new GroupStore(localStorage);
+      const databaseFile = new DatabaseFile(localStorage);
+      const groupStore = databaseFile.groupStore;
       let databaseLoaded;
       function getDatabase() {
         if (!databaseLoaded) {
-          databaseLoaded = loadDatabase(database);
+          databaseLoaded = databaseFile.load(database);
         }
         return databaseLoaded.then(() => database);
       }

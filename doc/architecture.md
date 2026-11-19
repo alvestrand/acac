@@ -55,7 +55,8 @@ touching the DOM, so those calculations can be tested separately.
   both tabs changed them. `readStoredGroups` reads the groups that
   older versions kept in localStorage. The name of the current group
   is not part of the groups: each tab keeps its own in `index.js`,
-  remembered in localStorage.
+  remembered in sessionStorage, and a new tab starts with the one in
+  the database file (see `opfsdb.js`).
 - `file_export.js`: whole-database and group export/import. When
   merging records, newer Geni `updated_at` data replaces older
   attributes while parent links from either record are retained.
@@ -66,14 +67,24 @@ touching the DOM, so those calculations can be tested separately.
   tab has saved, and the stored data is merged into the tab's
   (`Database.mergeFrom`, `mergeGroups`) before saving. Saves run under
   a Web Lock. A file with no `groups` is migrated from localStorage.
-  Deleting profiles is not merged: a removed profile comes back from
-  another tab's file.
+  Each save also stores the saving tab's current group, which a new
+  tab starts with; files from older versions have none, and the old
+  `currentSet` key in localStorage is read instead. localStorage is
+  only read. The page's display settings (initials only, grouping
+  algorithm and year limit, "Show") are kept per tab in
+  sessionStorage, so saving the file is the only change that reaches
+  other tabs. Deleting profiles is not merged: a removed profile comes
+  back from another tab's file.
 - `fake_opfs.js`: in-memory fakes of the file system directory and Web
   Locks, used by `opfsdb.test.js`.
 - `fake_geni_client.js`: an in-memory Geni API fake used by
   `tree_builder.test.js`.
 - `tools/count_groups.js`: manually compares grouping algorithms on a
   saved database.
+- `tools/make_screenshots.js`: regenerates the ACAC screenshots in
+  `doc/` by loading the invented family in `tools/sample-group.json`
+  into the page in headless Chrome (see "Updating the Documentation"
+  in `AGENTS.md`).
 
 ## Tree Building and Path Search
 
