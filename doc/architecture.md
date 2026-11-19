@@ -81,6 +81,10 @@ touching the DOM, so those calculations can be tested separately.
   `tree_builder.test.js`.
 - `tools/count_groups.js`: manually compares grouping algorithms on a
   saved database.
+- `tools/make_screenshots.js`: regenerates the ACAC screenshots in
+  `doc/` by loading the invented family in `tools/sample-group.json`
+  into the page in headless Chrome (see "Updating the Documentation"
+  in `AGENTS.md`).
 
 ## Tree Building and Path Search
 

@@ -72,5 +72,5 @@ tree. When you get down to the target profile, you should be able to
 merge the ones you entered yourself.
 
 If you extend the tree with more ancestors after adding the profile to
-ACAC, you can use the "rebuild tree" function to get ACAC to fetch the
-new profiles into ACAC for consideration.
+ACAC, use "Rebuild tree" in the profile's "Actions" menu to get ACAC
+to fetch the new profiles into ACAC for consideration.

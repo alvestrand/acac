@@ -79,8 +79,9 @@
       </p>
       <p>
         Then copy the URL found above, or enter the profile's GUID, in the
-        "Add profile" field. ACAC will then (after asking permission) search
-        Geni for the ancestors of that profile. And if we're lucky, we'll end
+        "Add profile" field. ACAC will then (after asking you to log in to
+        Geni) search Geni for the ancestors of that profile, back to the year
+        in "Limit for tree building". And if we're lucky, we'll end
         up with a display like these examples, showing ancestors for this
         particular segment.
       </p>
@@ -120,15 +121,59 @@
       and different ancestors can have different trees. "Path" shows the
       same paths as a list for each profile.
     </p>
+    <h2>Working with the profiles in a group</h2>
     <p>
-      Hit the "save database" button to save your work so far in the browser,
-      or use "save to file" to save the database to a file. Filenames are
-      automatically generated. The database and saved groups are kept in
-      browser storage and should be available after restarting the browser.
+      Each profile in the list has an "Actions" menu:
+    </p>
+    <ul>
+      <li>"Extend tree" fetches ancestors of the profile that ACAC has not
+        seen yet, back to the year in "Limit for tree building".</li>
+      <li>"Rebuild tree" fetches the profile and all its ancestors again,
+        back to the year in "Limit for tree building", to pick up changes
+        made on Geni since they were fetched, such as
+        new parents added to profiles ACAC already has.</li>
+      <li>"Find paths to other profiles" asks Geni for the blood path from
+        the profile to each other profile in the group, within "Age limit
+        for path search" and "Length limit for path search", and adds the
+        profiles on the paths. This can find shared ancestors beyond the
+        limit for tree building.</li>
+      <li>"Exclude from matching" keeps the profile in the group but leaves
+        it out when grouping, for instance while you check whether it
+        belongs; "Include in matching" takes it back.</li>
+      <li>"Remove from group" removes the profile from the group.</li>
+    </ul>
+    <p>
+      The "Grouping" menu chooses how profiles are grouped by their shared
+      ancestors, and the "Limit for grouping ancestors" slider leaves out
+      ancestors born before the chosen year. A number in brackets after an
+      ancestor, such as [0], is how many ancestors ACAC knows for that
+      person; when there are few, clicking it fetches two more generations.
+      "Show initials only" replaces the names of the group's profiles with
+      their initials, so that you can share a screenshot without showing
+      who your matches are.
+    </p>
+    <h2>Saving your work</h2>
+    <p>
+      The database and the groups are kept in browser storage and should be
+      available after restarting the browser. ACAC saves them after fetching
+      from Geni and when you switch groups; hit the "save database" button to
+      save your work at other times, or use "save to file" to save the
+      database to a file. Filenames are automatically generated.
     </p>
     <p>
-      You can also use "Save group" to save the information gathered for
-      this group to a file too.
+      "Save group" saves the information gathered for the current group to a
+      file, and "Load group" adds such a file to your database, for instance
+      to continue the work on another computer. "Rename group" and "Delete
+      group" rename or delete the current group.
+    </p>
+    <p>
+      ACAC can be open in several browser tabs at once. They share the
+      database and the groups, which each tab merges when it saves. Each tab
+      has its own settings, such as "Show" and "Grouping", and its own current
+      group; a new tab starts with the standard settings and the group that
+      was current when the database was last saved. The Geni login is also
+      kept per tab: a tab stays logged in when you reload it, but a new tab
+      asks you to log in again.
     </p>
     <p>
       Enjoy!
