@@ -66,12 +66,23 @@ touching the DOM, so those calculations can be tested separately.
   version is higher than the one the tab last loaded or saved, another
   tab has saved, and the stored data is merged into the tab's
   (`Database.mergeFrom`, `mergeGroups`) before saving. Saves run under
-  a Web Lock. A file with no `groups` is migrated from localStorage.
-  Each save also stores the saving tab's current group, which a new
-  tab starts with; files from older versions have none, and the old
-  `currentSet` key in localStorage is read instead. localStorage is
-  only read. The page's display settings (initials only, grouping
-  algorithm and year limit, "Show") are kept per tab in
+  a Web Lock, and loading reads the file under the same lock: a file
+  snapshot read while another tab saves fails with `NotReadableError`.
+  If a save cannot read the stored file, the save fails and the file
+  is kept; only a file whose contents are not a database is
+  overwritten. `index.js` shows a failed load as an unexpected error
+  and stops starting the page, rather than going on with an empty
+  database. `replace`, used by "Load from file" to restore a backup,
+  writes a new file without reading the stored one: it moves the old
+  file to `GeniDatabase.old` (or deletes it if it cannot be moved) and
+  gives the new file a higher version than the old one, so other tabs
+  merge it rather than save over it. A tab whose load failed reloads
+  after the restore. A file with no `groups` is migrated from
+  localStorage. Each save also stores the saving tab's current group,
+  which a new tab starts with; files from older versions have none,
+  and the old `currentSet` key in localStorage is read instead.
+  localStorage is only read. The page's display settings (initials
+  only, grouping algorithm and year limit, "Show") are kept per tab in
   sessionStorage, so saving the file is the only change that reaches
   other tabs. Deleting profiles is not merged: a removed profile comes
   back from another tab's file.

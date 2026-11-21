@@ -21,6 +21,9 @@ const databaseFile = new DatabaseFile(localStorage);
 let lastDatabaseSize = 0;
 let profileAdditionCount = 0;
 let savedProfileAdditionCount = 0;
+// True if the database file could not be read, in which case the page
+// stops starting, and "Load from file" can restore a backup.
+let databaseUnreadable = false;
 const cacheSizeElement = document.getElementById('cache-size');
 db.sizeView = (number) => {
   cacheSizeElement.innerText = number;
@@ -82,6 +85,32 @@ function hideErrorMessage() {
   errorMessageElement.hidden = true;
   loginToGeniButton.hidden = true;
 }
+
+// Show an error the code did not expect, such as a failure to read or
+// write the database file, instead of leaving it to the console.
+function showUnexpectedError(kind, error, lasting = false) {
+  console.log('Unexpected error:', kind, error);
+  showErrorMessage(
+    'Unexpected error: ' +
+      kind +
+      ' (' +
+      (error?.message ?? String(error)) +
+      '). See the console for more.',
+    lasting,
+  );
+}
+
+// Errors that nothing else catches, from event handlers and promises,
+// are shown the same way.
+window.addEventListener('error', (event) => {
+  showUnexpectedError(
+    event.error?.name ?? 'error',
+    event.error ?? event.message,
+  );
+});
+window.addEventListener('unhandledrejection', (event) => {
+  showUnexpectedError(event.reason?.name ?? 'error', event.reason);
+});
 
 // Called when the user asks for a new operation: the error message
 // from an earlier one no longer applies.
@@ -1288,12 +1317,33 @@ async function importFromFile(file) {
   ) {
     return;
   }
+  const importedGroup = applyImport(imported, db, groupStore);
+  // The file is replaced without reading it, so that a backup can be
+  // restored also when the stored file is damaged.
+  if (databaseUnreadable) {
+    // The page did not finish starting: start it again from the new file.
+    try {
+      await databaseFile.replace(db, importedGroup);
+    } catch (error) {
+      showUnexpectedError('could not replace the database', error, true);
+      return;
+    }
+    sessionStorage.setItem(currentGroupKey, importedGroup);
+    location.reload();
+    return;
+  }
   // The current group as shown on the page is replaced too, so it is
   // selected before saving.
-  const importedGroup = applyImport(imported, db, groupStore);
   selectGroup(importedGroup);
   buildAncestorGroups();
-  await saveDatabaseSnapshot();
+  saveCurrentGroupState();
+  try {
+    await databaseFile.replace(db, currentGroup);
+  } catch (error) {
+    showUnexpectedError('could not replace the database', error);
+    return;
+  }
+  savedProfileAdditionCount = profileAdditionCount;
 }
 
 // Binding actions to buttons ======================================
@@ -1585,7 +1635,22 @@ displayPathElement.addEventListener('change', () => {
 });
 
 // ===== Initialize the page from last saved state ====
-const groupsMigrated = await databaseFile.load(db);
+let groupsMigrated;
+try {
+  groupsMigrated = await databaseFile.load(db);
+} catch (error) {
+  // Don't go on with an empty database: stop starting the page here.
+  // The file is left as it is. Waiting forever, rather than throwing,
+  // keeps the browser from reporting the error as uncaught.
+  databaseUnreadable = true;
+  showUnexpectedError(
+    'could not read the database; reload the page to try again, or ' +
+      'restore a backup with "Load from file"',
+    error,
+    true,
+  );
+  await new Promise(() => {});
+}
 lastDatabaseSize = db.size();
 profileAdditionCount = 0;
 savedProfileAdditionCount = 0;
