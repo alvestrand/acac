@@ -182,8 +182,9 @@ test('Operations are executed one at a time, in order', async () => {
   expect(Geni.api).toHaveBeenCalledTimes(1);
   expect(Geni.api.mock.calls[0][0]).toBe('/profile-g1');
 
-  // First operation is still active, so nothing new starts.
-  jest.advanceTimersByTime(5000);
+  // First operation is still active, so nothing new starts (within the
+  // time Geni has to answer).
+  jest.advanceTimersByTime(4000);
   expect(Geni.api).toHaveBeenCalledTimes(1);
 
   // The second operation starts as soon as the first is finished.
@@ -420,4 +421,111 @@ test('A rejected login is forgotten and stops fetching', async () => {
   expect(Geni._access_token).toBeNull();
   expect(Geni._refresh_token).toBeNull();
   expect(Geni.api).toHaveBeenCalledTimes(1);
+});
+
+// Operations Geni does not answer
+
+test('An operation Geni does not answer in time forgets the login', async () => {
+  const storage = new FakeStorage();
+  storage.setItem('geniAccessToken', 'expired');
+  storage.setItem('geniRefreshToken', 'refresh');
+  Geni._access_token = 'expired';
+  Geni._refresh_token = 'refresh';
+  const pending = [];
+  apiHandler = (operation, args, callback) => pending.push(callback);
+  const client = new GeniClient('app', storage);
+  client.onTimeout = jest.fn();
+  client.onLoggedOut = jest.fn();
+  const first = client.getPerson('1');
+  const second = client.getPerson('2');
+
+  jest.advanceTimersByTime(4999);
+  expect(client.onTimeout).not.toHaveBeenCalled();
+  jest.advanceTimersByTime(1);
+  await expect(first).rejects.toThrow('Geni did not answer within 5 seconds');
+  await expect(second).rejects.toThrow('Fetching stopped');
+  expect(client.onTimeout).toHaveBeenCalledWith('/profile-g1');
+  expect(client.onLoggedOut).not.toHaveBeenCalled();
+  expect(client.connected).toBe(false);
+  expect(client.stopped).toBe(true);
+  expect(storage.length).toBe(0);
+  expect(Geni._access_token).toBeNull();
+  expect(Geni._refresh_token).toBeNull();
+
+  // A late answer is ignored.
+  pending[0]({ id: 'late' });
+  expect(Geni.api).toHaveBeenCalledTimes(1);
+});
+
+test('After a timeout, connect asks for a new login', async () => {
+  Geni._access_token = 'expired';
+  Geni.connect.mockImplementation((cb) => {
+    if (Geni._access_token) {
+      cb();
+    } else {
+      Geni._access_token = 'fresh';
+      cb({ status: 'authorized' });
+    }
+  });
+  apiHandler = () => {};
+  const storage = new FakeStorage();
+  storage.setItem('geniAccessToken', 'expired');
+  const client = new GeniClient('app', storage);
+  const operation = client.getPerson('1');
+  jest.advanceTimersByTime(5000);
+  await expect(operation).rejects.toThrow('did not answer');
+
+  await client.connect();
+  expect(client.connected).toBe(true);
+  expect(storage.getItem('geniAccessToken')).toBe('fresh');
+});
+
+test('An answer in time cancels the timeout', async () => {
+  const pending = [];
+  apiHandler = (operation, args, callback) => pending.push(callback);
+  const client = new GeniClient('app');
+  client.onTimeout = jest.fn();
+  const operation = client.getPerson('1');
+  jest.advanceTimersByTime(4000);
+  pending[0]({ id: 'profile-1' });
+  await expect(operation).resolves.toEqual({ id: 'profile-1' });
+  jest.advanceTimersByTime(10000);
+  expect(client.onTimeout).not.toHaveBeenCalled();
+  expect(client.connected).toBe(false);
+  expect(client.stopped).toBe(false);
+});
+
+test('A stopped operation does not time out', async () => {
+  apiHandler = () => {};
+  const client = new GeniClient('app');
+  client.onTimeout = jest.fn();
+  const operation = client.getPerson('1');
+  client.stop();
+  await expect(operation).rejects.toThrow('Fetching stopped');
+  jest.advanceTimersByTime(10000);
+  expect(client.onTimeout).not.toHaveBeenCalled();
+});
+
+test('logout stops fetching and forgets the login', async () => {
+  const storage = new FakeStorage();
+  storage.setItem('geniAccessToken', 'access');
+  storage.setItem('geniRefreshToken', 'refresh');
+  Geni._access_token = 'access';
+  Geni._refresh_token = 'refresh';
+  apiHandler = () => {};
+  const client = new GeniClient('app', storage);
+  client.onLoggedOut = jest.fn();
+  client.onTimeout = jest.fn();
+  const operation = client.getPerson('1');
+
+  client.logout();
+  await expect(operation).rejects.toThrow('Fetching stopped');
+  expect(client.connected).toBe(false);
+  expect(client.stopped).toBe(true);
+  expect(storage.length).toBe(0);
+  expect(Geni._access_token).toBeNull();
+  expect(Geni._refresh_token).toBeNull();
+  jest.advanceTimersByTime(10000);
+  expect(client.onTimeout).not.toHaveBeenCalled();
+  expect(client.onLoggedOut).not.toHaveBeenCalled();
 });

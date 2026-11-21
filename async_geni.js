@@ -12,6 +12,12 @@ const profileParams = { fields: profileFields.join(',') };
 // is exceeded, in milliseconds.
 const rateLimitRetryDelay = 5000;
 
+// How long to wait for Geni's answer to an operation, in milliseconds.
+// Geni seems not to answer at all when the access token has expired, so
+// an operation without an answer is taken to mean that the login is
+// gone.
+const answerTimeout = 5000;
+
 // The keys under which the Geni login is kept in the token storage
 // given to GeniClient (normally sessionStorage), so that it survives
 // reloading the page.
@@ -25,7 +31,8 @@ class GeniOperation {
     this.resolve = resolve;
     this.reject = reject;
     this.onCallbackError = onCallbackError;
-    // Set when the client stops fetching. Geni's answer is then ignored.
+    // Set when the client stops fetching or the operation times out.
+    // Geni's answer is then ignored.
     this.cancelled = false;
   }
 
@@ -33,9 +40,21 @@ class GeniOperation {
   // rate limit is exceeded, in which case the operation should be run
   // again later. Otherwise the operation is resolved or rejected, and
   // done is called with 'unauthorized' if Geni did not accept the access
-  // token, 'answered' if Geni answered otherwise, or 'failed' if the call
-  // to Geni threw.
+  // token, 'answered' if Geni answered otherwise, 'timedOut' if Geni did
+  // not answer within answerTimeout, or 'failed' if the call to Geni
+  // threw.
   execute(done) {
+    const timer = setTimeout(() => {
+      if (this.cancelled) {
+        return;
+      }
+      this.cancelled = true;
+      console.log('Geni did not answer:', this.operation);
+      this.reject(
+        new Error(`Geni did not answer within ${answerTimeout / 1000} seconds`),
+      );
+      done('timedOut');
+    }, answerTimeout);
     try {
       // Geni modifies the args argument, so clone it.
       const args = structuredClone(this.args);
@@ -43,6 +62,7 @@ class GeniOperation {
         if (this.cancelled) {
           return;
         }
+        clearTimeout(timer);
         try {
           if (data.error) {
             console.log('Geni operation failed:', this.operation, data.error);
@@ -74,6 +94,7 @@ class GeniOperation {
         }
       });
     } catch (error) {
+      clearTimeout(timer);
       console.log('Geni operation threw an error:', this.operation, error);
       this.reject(error);
       done('failed');
@@ -112,6 +133,10 @@ class GeniClient {
     // Called when Geni no longer accepts the login. The client is then
     // not connected, and fetching is stopped.
     this.onLoggedOut = () => {};
+    // Called with the operation (its API path) when Geni did not answer
+    // it in time. The login is then forgotten, the client is not
+    // connected, and fetching is stopped.
+    this.onTimeout = () => {};
     Geni.init({
       app_id: appId,
       logging: false,
@@ -145,6 +170,32 @@ class GeniClient {
   // it: forget the login and stop fetching.
   #loggedOut() {
     console.log('Geni no longer accepts the login');
+    this.#forgetLogin();
+    this.stop();
+    this.onLoggedOut();
+  }
+
+  // Geni did not answer operation in time, probably because the access
+  // token has expired: forget the login, so that the next connect asks
+  // for a new one, and stop fetching.
+  #timedOut(operation) {
+    this.#forgetLogin();
+    this.stop();
+    this.onTimeout(operation);
+  }
+
+  // Log out of ACAC on the user's request: stop fetching and forget the
+  // login, so that the next connect asks for a new one. The user stays
+  // logged in to geni.com itself.
+  logout() {
+    console.log('Logging out of Geni');
+    this.stop();
+    this.#forgetLogin();
+  }
+
+  // Forget the login, in the SDK and in the token storage, so that the
+  // client is not connected and the next connect asks for a new login.
+  #forgetLogin() {
     this.connected = false;
     // The SDK only clears its access token itself the first time it
     // tries to refresh it, so clear it here, or connect would not ask
@@ -153,8 +204,6 @@ class GeniClient {
     Geni._refresh_token = null;
     this.#tokenStorage?.removeItem(accessTokenKey);
     this.#tokenStorage?.removeItem(refreshTokenKey);
-    this.stop();
-    this.onLoggedOut();
   }
 
   // Add an operation to the queue, starting it at once if nothing
@@ -178,6 +227,11 @@ class GeniClient {
       if (outcome === 'unauthorized') {
         this.#operationQueue.shift();
         this.#loggedOut();
+        return;
+      }
+      if (outcome === 'timedOut') {
+        this.#operationQueue.shift();
+        this.#timedOut(op.operation);
         return;
       }
       if (outcome === 'rateLimited') {

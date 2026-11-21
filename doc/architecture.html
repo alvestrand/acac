@@ -200,7 +200,14 @@ Geni access and refresh tokens in the storage it is given
 while a new tab logs in for itself. When Geni answers an
 <code>OAuthException</code> that the SDK could not cure by refreshing
 the token, the client forgets the login, stops fetching, and calls
-<code>onLoggedOut</code>.</li>
+<code>onLoggedOut</code>. If Geni does not answer an operation within
+five seconds, the operation is rejected, a late answer is ignored, the
+login is forgotten and fetching stopped, and the client calls
+<code>onTimeout</code>; <code>index.js</code> shows this as a surprise,
+and the next operation asks for a new login. <code>logout()</code>,
+behind the page’s “Log out of Geni” button, does the same on the user’s
+request; it does not call the SDK’s <code>Geni.Auth.logout</code>, which
+would log the user out of geni.com itself.</li>
 <li><code>tree_builder.js</code>: <code>TreeBuilder</code> fetches
 profiles to add, builds ancestors to a year or generation limit, and
 refreshes trees through a shared pool so shared ancestors are refreshed
@@ -326,7 +333,10 @@ with no answer if the SDK already has a token. On an
 <code>OAuthException</code> the SDK tries once to refresh the token, and
 only clears its token that first time. What Geni answers for an expired
 token, and how long tokens last, has not been observed; a made-up token
-gives <code>OAuthException</code> “Invalid access token”.</li>
+gives <code>OAuthException</code> “Invalid access token”. Operations
+that never get an answer are believed to happen when the token has
+expired, which is why <code>GeniClient</code> treats a missing answer as
+a lost login; this has not been confirmed.</li>
 <li>Rate-limit responses include <code>X-API-Rate-Limit</code>,
 <code>X-API-Rate-Remaining</code>, and <code>X-API-Rate-Window</code>.
 Parallel requests do not improve throughput.</li>
