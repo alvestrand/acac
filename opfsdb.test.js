@@ -217,3 +217,117 @@ test('the current group of older versions is read from local storage', async () 
   const next = await openTab(environment, localStorage);
   expect(next.file.storedCurrentGroup).toBe('new');
 });
+
+test('loading waits while another tab holds the lock to save', async () => {
+  const environment = fakeEnvironment();
+  const first = await openTab(environment);
+  addPerson(first, 'a');
+  await first.file.save(first.db);
+  let release;
+  const saving = environment.locks.request(
+    'acac-database',
+    () => new Promise((resolve) => (release = resolve)),
+  );
+  const second = { db: new Database() };
+  second.file = new DatabaseFile(new FakeStorage(), environment);
+  const loading = second.file.load(second.db);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  // The other tab writes the file while it holds the lock.
+  addPerson(first, 'b');
+  const handle = await (
+    await environment.directory()
+  ).getFileHandle('GeniDatabase');
+  handle.content = JSON.stringify({
+    version: 2,
+    ...first.db.toJsonObject(),
+    groups: {},
+  });
+  release();
+  await saving;
+  await loading;
+  expect(second.db.get('b')).toBeDefined();
+});
+
+test('a save that cannot read the stored file fails and keeps it', async () => {
+  const environment = fakeEnvironment();
+  const first = await openTab(environment);
+  const second = await openTab(environment);
+  addPerson(first, 'a');
+  await first.file.save(first.db);
+  const handle = await (
+    await environment.directory()
+  ).getFileHandle('GeniDatabase');
+  const content = handle.content;
+  handle.failReads = true;
+  await expect(second.file.save(second.db)).rejects.toThrow(
+    'could not be read',
+  );
+  expect(handle.content).toBe(content);
+});
+
+test('replace writes over a file that cannot be read, moving it aside', async () => {
+  const environment = fakeEnvironment();
+  const old = await openTab(environment);
+  addPerson(old, 'old');
+  for (let i = 0; i < 5; i++) {
+    await old.file.save(old.db);
+  }
+  const directory = await environment.directory();
+  const handle = await directory.getFileHandle('GeniDatabase');
+  const oldContent = handle.content;
+  handle.failReads = true;
+
+  // A tab that could not load the file restores a backup.
+  const tab = { db: new Database() };
+  tab.file = new DatabaseFile(new FakeStorage(), environment);
+  await expect(tab.file.load(tab.db)).rejects.toThrow('could not be read');
+  addPerson(tab, 'restored');
+  tab.file.groupStore.save('g', ['restored']);
+  const version = await tab.file.replace(tab.db, 'g');
+
+  expect(version).toBe(6);
+  expect(directory.names()).toStrictEqual(['GeniDatabase', 'GeniDatabase.old']);
+  expect((await directory.getFileHandle('GeniDatabase.old')).content).toBe(
+    oldContent,
+  );
+  const file = await storedFile(environment);
+  expect(file.version).toBe(6);
+  expect(Object.keys(file.persons)).toStrictEqual(['restored']);
+  expect(file.groups.g.members).toStrictEqual(['restored']);
+  expect(file.currentGroup).toBe('g');
+
+  // The tab can save normally afterwards, without merging.
+  const result = await tab.file.save(tab.db, 'g');
+  expect(result.version).toBe(7);
+  expect(result.merged).toBe(false);
+});
+
+test('replace deletes the old file if it cannot be moved', async () => {
+  const environment = fakeEnvironment();
+  const tab = await openTab(environment);
+  addPerson(tab, 'a');
+  await tab.file.save(tab.db);
+  const directory = await environment.directory();
+  directory.canMove = false;
+  await tab.file.replace(new Database(), '');
+  expect(directory.names()).toStrictEqual(['GeniDatabase']);
+  expect(Object.keys((await storedFile(environment)).persons)).toStrictEqual(
+    [],
+  );
+});
+
+test('another tab merges a replaced file rather than saving over it', async () => {
+  const environment = fakeEnvironment();
+  const first = await openTab(environment);
+  addPerson(first, 'a');
+  await first.file.save(first.db);
+  const second = await openTab(environment);
+  const backup = new Database();
+  backup.addWithAttributes('b', { id: 'profile-b', name: 'b' });
+  await second.file.replace(backup, '');
+  const result = await first.file.save(first.db);
+  expect(result.merged).toBe(true);
+  expect(
+    Object.keys((await storedFile(environment)).persons).sort(),
+  ).toStrictEqual(['a', 'b']);
+});

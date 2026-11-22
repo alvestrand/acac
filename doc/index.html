@@ -161,6 +161,15 @@
       database to a file. Filenames are automatically generated.
     </p>
     <p>
+      A file saved with "save to file" is a backup of the whole database and
+      all groups; keep a recent one. "Load from file" replaces the database
+      and all groups with the contents of such a file. This also works when
+      the browser's copy of the database has been damaged and ACAC says it
+      could not read the database: load your latest backup, and ACAC starts
+      again from it. The damaged copy is kept aside in the browser, but
+      anything added since the backup was saved is lost.
+    </p>
+    <p>
       "Save group" saves the information gathered for the current group to a
       file, and "Load group" adds such a file to your database, for instance
       to continue the work on another computer. "Rename group" and "Delete

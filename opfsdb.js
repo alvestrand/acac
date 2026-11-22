@@ -14,6 +14,9 @@ import { GroupStore, mergeGroups, readStoredGroups } from './groups.js';
 export { DatabaseFile };
 
 const databaseName = 'GeniDatabase';
+// replace moves the file it replaces to this name, replacing an earlier
+// one, in case its contents are still wanted.
+const replacedName = 'GeniDatabase.old';
 // The key under which older versions kept the current group in
 // localStorage.
 const legacyCurrentGroupKey = 'currentSet';
@@ -74,7 +77,11 @@ class DatabaseFile {
     const fileHandle = await this.#getFileHandle(false);
     let parsed;
     if (fileHandle) {
-      const data = await (await fileHandle.getFile()).text();
+      // Read under the lock: a file read while another tab saves it
+      // fails with NotReadableError.
+      const data = await this.#withLock(async () =>
+        (await fileHandle.getFile()).text(),
+      );
       if (data) {
         try {
           parsed = JSON.parse(data);
@@ -150,6 +157,63 @@ class DatabaseFile {
       }
     }
     const version = Math.max(storedVersion, this.#loadedVersion) + 1;
+    await this.#write(fileHandle, db, currentGroup, version);
+    return { version, merged, conflicts, added };
+  }
+
+  // Replace the file with the database and the groups, without reading
+  // or merging what is stored: for loading a backup, which must work
+  // also when the stored file cannot be read. The old file is moved to
+  // replacedName, or deleted if it cannot be moved. The new file gets a
+  // higher version than the old one, when that can be read, and than
+  // this tab has seen, so that other tabs merge it rather than save
+  // over it. Returns the new version.
+  async replace(db, currentGroup) {
+    return this.#withLock(async () => {
+      const directory = await this.#environment.directory();
+      let storedVersion = 0;
+      const old = await this.#getFileHandle(false);
+      if (old) {
+        try {
+          storedVersion = await readVersion(old);
+        } catch (error) {
+          console.log('Could not read the version of the replaced file', error);
+        }
+        await this.#moveAside(directory, old);
+      }
+      const version = Math.max(storedVersion, this.#loadedVersion) + 1;
+      await this.#write(
+        await this.#getFileHandle(true),
+        db,
+        currentGroup,
+        version,
+      );
+      console.log('Database replaced, version', version);
+      return version;
+    });
+  }
+
+  // Move the database file to replacedName, or delete it if that fails.
+  async #moveAside(directory, fileHandle) {
+    try {
+      await directory.removeEntry(replacedName);
+    } catch (error) {
+      if (error.name !== 'NotFoundError') {
+        console.log('Could not remove', replacedName, error);
+      }
+    }
+    try {
+      await fileHandle.move(replacedName);
+      console.log('Moved the old database file to', replacedName);
+    } catch (error) {
+      console.log('Could not move the old database file, deleting it', error);
+      await directory.removeEntry(databaseName);
+    }
+  }
+
+  // Write the database, the groups and the current group to the file as
+  // the given version, and make that the version this tab is based on.
+  async #write(fileHandle, db, currentGroup, version) {
     const groups = this.#groupStore.toObject();
     const writable = await fileHandle.createWritable();
     await writable.write(
@@ -162,14 +226,16 @@ class DatabaseFile {
     await writable.close();
     this.#loadedVersion = version;
     this.#baseGroups = groups;
-    return { version, merged, conflicts, added };
   }
 
-  // The database and groups stored in the file, or undefined if it
-  // can't be read, in which case it is overwritten.
+  // The database and groups stored in the file, or undefined if its
+  // contents are not a database, in which case it is overwritten. An
+  // error reading the file is thrown, so that the save is abandoned and
+  // the file is kept.
   async #parseStored(fileHandle) {
+    const text = await (await fileHandle.getFile()).text();
     try {
-      const parsed = JSON.parse(await (await fileHandle.getFile()).text());
+      const parsed = JSON.parse(text);
       const stored = new Database();
       stored.fromJsonObject(parsed);
       return { db: stored, groups: parsed.groups };
@@ -192,8 +258,8 @@ class DatabaseFile {
     }
   }
 
-  // Run the function while no other tab is saving. Without the Web Locks
-  // API, tabs are not kept from saving at the same time.
+  // Run the function while no other tab is reading or saving the file.
+  // Without the Web Locks API, tabs are not kept apart.
   #withLock(callback) {
     const locks = this.#environment.locks;
     return locks ? locks.request(lockName, callback) : callback();
