@@ -68,6 +68,7 @@ function refreshAfterMerge(conflictNames) {
 
 const errorMessageElement = document.getElementById('error-message');
 const loginToGeniButton = document.getElementById('login-to-geni');
+const logoutFromGeniButton = document.getElementById('logout-from-geni');
 
 // True if the error message shown tells of a lasting state (install
 // error, login status) rather than the outcome of an operation.
@@ -147,8 +148,26 @@ const client = new GeniClient(geniAppId, sessionStorage);
 if (errorMessageElement.hidden && !client.connected) {
   showErrorMessage('Not logged in', true);
 }
+// The logout button is shown while the client holds a login.
+function showLoginState() {
+  logoutFromGeniButton.hidden = !client.connected;
+}
+showLoginState();
 client.onLoggedOut = () => {
   showErrorMessage('Not logged in', true);
+  showLoginState();
+};
+// Geni did not answer in time, which seems to happen when the access
+// token has expired. The client has forgotten the login, so the next
+// operation asks for a new one.
+client.onTimeout = (operation) => {
+  showLoginState();
+  showSurprise(
+    'no answer',
+    operation +
+      ' got no answer within 5 seconds; the next operation will ask you ' +
+      'to log in again',
+  );
 };
 client.onCallbackError = (error, operation) => {
   reportSurprise(
@@ -196,6 +215,8 @@ async function connectToGeni() {
   } catch (error) {
     showErrorMessage('Login failed', true);
     throw error;
+  } finally {
+    showLoginState();
   }
 }
 
@@ -1359,6 +1380,14 @@ loginToGeniButton.addEventListener('click', async () => {
   } catch (error) {
     console.log('Login failed', error);
   }
+});
+
+// Forget the login, for instance when Geni stops answering, so that the
+// next operation asks for a new one. Fetching in progress is stopped.
+logoutFromGeniButton.addEventListener('click', () => {
+  client.logout();
+  showLoginState();
+  showErrorMessage('Not logged in', true);
 });
 
 groupNotesElement.addEventListener('input', () => {
