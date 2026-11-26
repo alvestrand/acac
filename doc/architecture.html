@@ -345,6 +345,32 @@ names and profile API URLs; sample responses also include
 <code>step_count</code>. A relation’s label such as <code>brother</code>
 or <code>son</code> is not sufficient to infer parent links, so ACAC
 uses unions.</li>
+<li>Login without <code>jsdk.js</code> works the way the SDK does it: a
+popup to <code>https://www.geni.com/oauth/authorize</code> with
+<code>response_type=token</code>, <code>client_id</code>,
+<code>display=popup</code>, a <code>callback</code> name, and the page’s
+<code>origin</code>. The Geni page in the popup sends the opener a
+<code>postMessage</code> with a query string holding
+<code>callback</code>, <code>access_token</code>, and
+<code>refresh_token</code>. <code>logintest.html</code> tries this.</li>
+<li>The full-page redirect flow from the public documentation
+(<code>/platform/oauth/authorize</code> with <code>redirect_uri</code>)
+showed the authorize screen, but after the user allowed access it ended
+on <code>geni.com/home</code> with no token. Geni ignored the
+<code>redirect_uri</code> for a page served from <code>127.0.0.1</code>;
+whether one on the app’s registered Site Domain would work has not been
+tested.</li>
+<li>The API returns plain JSON, but every response, including preflights
+and <code>/platform/oauth/validate_token</code>, has
+<code>Access-Control-Allow-Origin: https://www.geni.com</code> whatever
+the request’s origin. Browsers therefore block <code>fetch</code> from
+other origins, both with an <code>Authorization: Bearer</code> header
+(the preflight fails) and with an <code>access_token</code> query
+parameter. The header case was seen with a real token, the query
+parameter case with a fake one. JSONP with a <code>callback</code>
+parameter works, which is what <code>jsdk.js</code> uses. Browser
+extensions such as SmartCopy avoid the limit through host permissions,
+which web pages cannot have.</li>
 </ul>
 <h2 id="known-issues-and-limits">Known Issues and Limits</h2>
 <ul>
@@ -352,7 +378,8 @@ uses unions.</li>
 <code>index_page.test.js</code>, which loads the page in headless Chrome
 and checks that it starts without errors. Test UI changes in a browser
 when possible; API behavior can be inspected with
-<code>testpage.html</code>.</li>
+<code>testpage.html</code>, and login without <code>jsdk.js</code> with
+<code>logintest.html</code>. Neither page is deployed.</li>
 </ul>
 </body>
 </html>

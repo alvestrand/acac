@@ -1,0 +1,361 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="index.css" />
+    <title>ACAC Geni login test</title>
+  </head>
+  <body>
+    <h1>Geni login test</h1>
+    <p>
+      Logs in to Geni and fetches the logged-in user's profile with plain HTTP,
+      without Geni's <code>jsdk.js</code>. This page is for experiments and is
+      not deployed.
+    </p>
+    <p>
+      Login works the way <code>jsdk.js</code> does it: a popup opens
+      <code>https://www.geni.com/oauth/authorize</code> with
+      <code>response_type=token</code>, <code>client_id</code>,
+      <code>display=popup</code>, a <code>callback</code> name and this page's
+      <code>origin</code>. No <code>redirect_uri</code> is sent. When the user
+      allows access, the Geni page in the popup sends this page a message with
+      <code>postMessage</code>, holding a query string such as
+      <code>callback=…&amp;access_token=…&amp;refresh_token=…</code>. Only
+      messages from <code>https://www.geni.com</code> with the expected callback
+      are used.
+    </p>
+    <p>
+      <button id="login">Log in to Geni</button>
+      <button id="logout">Log out</button>
+    </p>
+    <h2>Login status</h2>
+    <pre id="status"></pre>
+    <h2>Logged-in profile</h2>
+    <p>
+      Requests <code>https://www.geni.com/api/profile</code> with no profile ID
+      using <code>fetch</code> and reads the answer as plain JSON. The token is
+      sent in an <code>Authorization: Bearer</code> header, as Geni's OAuth
+      documentation recommends, or as an <code>access_token</code> query
+      parameter.
+    </p>
+    <p>
+      Note: when this page was written, Geni answered every request with
+      <code>Access-Control-Allow-Origin: https://www.geni.com</code> whatever
+      the request's origin. If that is still so, the browser will not let this
+      page read the answer, and the requests below fail with a network error.
+    </p>
+    <p>
+      <label
+        ><input type="checkbox" id="use-header" checked /> Send the token in an
+        Authorization header</label
+      >
+    </p>
+    <p>
+      <button id="get-profile">Get profile</button>
+      <button id="validate">Validate token</button>
+    </p>
+    <div id="profile"></div>
+    <h2>Request</h2>
+    <pre id="request"></pre>
+    <h2>Answer</h2>
+    <pre id="answer"></pre>
+
+    <script type="module">
+      const geniHost = 'https://www.geni.com';
+      const authorizeUrl = geniHost + '/oauth/authorize';
+      const validateUrl = geniHost + '/platform/oauth/validate_token';
+      const invalidateUrl = geniHost + '/platform/oauth/invalidate_token';
+      const profileUrl = geniHost + '/api/profile';
+      const tokenKey = 'logintest-geni-token';
+
+      const statusElement = document.getElementById('status');
+      const requestElement = document.getElementById('request');
+      const answerElement = document.getElementById('answer');
+      const profileElement = document.getElementById('profile');
+
+      // The token is kept in sessionStorage so that it is gone when the
+      // tab is closed. It is never sent anywhere except to geni.com.
+      function storedToken() {
+        const stored = sessionStorage.getItem(tokenKey);
+        if (!stored) {
+          return undefined;
+        }
+        const token = JSON.parse(stored);
+        if (token.expiresAt && Date.now() > token.expiresAt) {
+          sessionStorage.removeItem(tokenKey);
+          return undefined;
+        }
+        return token;
+      }
+
+      function showStatus(extra) {
+        const token = storedToken();
+        let text;
+        if (token) {
+          text =
+            'Logged in. Token received ' +
+            new Date(token.receivedAt).toLocaleString() +
+            (token.expiresAt
+              ? ', expires ' + new Date(token.expiresAt).toLocaleString()
+              : ', no expiry given') +
+            '.';
+        } else {
+          text = 'Not logged in.';
+        }
+        statusElement.textContent = extra ? text + '\n' + extra : text;
+      }
+
+      const response = await fetch('.geni_app_id');
+      if (!response.ok) {
+        statusElement.textContent =
+          'Could not read .geni_app_id: ' + response.status;
+        throw new Error('No Geni app id');
+      }
+      const appId = (await response.text()).trim();
+
+      showStatus();
+
+      // Store the token from a login message and describe what came back,
+      // without showing the token itself.
+      function acceptLogin(data) {
+        const fields = [...data.keys()].join(', ');
+        const accessToken = data.get('access_token');
+        if (!accessToken) {
+          showStatus(
+            'Login failed. The message had fields: ' +
+              fields +
+              (data.get('error')
+                ? '; error=' +
+                  data.get('error') +
+                  ', ' +
+                  data.get('error_description')
+                : '') +
+              (data.get('status') ? '; status=' + data.get('status') : '') +
+              (data.get('message') ? ', message=' + data.get('message') : ''),
+          );
+          return;
+        }
+        const expiresIn = Number(data.get('expires_in'));
+        const receivedAt = Date.now();
+        sessionStorage.setItem(
+          tokenKey,
+          JSON.stringify({
+            accessToken: accessToken,
+            refreshToken: data.get('refresh_token'),
+            receivedAt: receivedAt,
+            expiresAt: expiresIn > 0 ? receivedAt + expiresIn * 1000 : null,
+          }),
+        );
+        showStatus(
+          'The login message had fields: ' +
+            fields +
+            '. expires_in=' +
+            data.get('expires_in') +
+            '.',
+        );
+        geniFetch(profileUrl, useHeader());
+      }
+
+      // The callback name the open popup was given, if any.
+      let pendingCallback;
+      let loginPopup;
+
+      window.addEventListener('message', (event) => {
+        if (typeof event.data !== 'string' || !pendingCallback) {
+          return;
+        }
+        const data = new URLSearchParams(event.data);
+        if (event.origin !== geniHost) {
+          console.log('Ignored a message from', event.origin);
+          return;
+        }
+        if (data.get('callback') !== pendingCallback) {
+          console.log('Ignored a message with callback', data.get('callback'));
+          return;
+        }
+        pendingCallback = undefined;
+        if (loginPopup && !loginPopup.closed) {
+          loginPopup.close();
+        }
+        acceptLogin(data);
+      });
+
+      document.getElementById('login').addEventListener('click', () => {
+        pendingCallback = 'logintest' + crypto.randomUUID().replaceAll('-', '');
+        const params = new URLSearchParams({
+          response_type: 'token',
+          client_id: appId,
+          display: 'popup',
+          callback: pendingCallback,
+          origin: location.origin,
+        });
+        const width = 600;
+        const height = 400;
+        const left = Math.round(screenX + (outerWidth - width) / 2);
+        const top = Math.round(screenY + (outerHeight - height) / 2.5);
+        loginPopup = window.open(
+          authorizeUrl + '?' + params,
+          pendingCallback,
+          `width=${width},height=${height},left=${left},top=${top}`,
+        );
+        if (!loginPopup) {
+          pendingCallback = undefined;
+          showStatus('The browser blocked the login popup.');
+          return;
+        }
+        showStatus('Waiting for the login popup…');
+        // Report it if the popup is closed without a login message.
+        const timer = setInterval(() => {
+          if (loginPopup.closed) {
+            clearInterval(timer);
+            // Keep waiting for the message: if Geni's page sets a
+            // cross-origin opener policy, the popup can look closed while
+            // it is still open.
+            if (pendingCallback) {
+              showStatus(
+                'The login popup looks closed, and no login message has ' +
+                  'come yet.',
+              );
+            }
+          }
+        }, 500);
+      });
+
+      function requireToken() {
+        const token = storedToken();
+        if (!token) {
+          showStatus('Log in first.');
+        }
+        return token;
+      }
+
+      function showRequest(description) {
+        // Do not show the token itself on the page.
+        requestElement.textContent = description;
+        answerElement.textContent = 'Waiting for answer…';
+        profileElement.textContent = '';
+      }
+
+      function showAnswer(started, data, headers) {
+        answerElement.textContent =
+          'Answer after ' +
+          (Date.now() - started) +
+          ' ms:\n' +
+          (headers ? headers + '\n\n' : '') +
+          JSON.stringify(data, null, 2);
+        showProfile(data);
+      }
+
+      function showProfile(data) {
+        profileElement.textContent = '';
+        if (!data || !data.id) {
+          return;
+        }
+        const name =
+          data.display_name ||
+          data.name ||
+          [data.first_name, data.last_name].join(' ');
+        const paragraph = document.createElement('p');
+        paragraph.append('Logged in as ');
+        const strong = document.createElement('strong');
+        strong.textContent = name;
+        paragraph.append(strong);
+        paragraph.append(
+          ' (' + data.id + (data.guid ? ', guid ' + data.guid : '') + ')',
+        );
+        if (data.profile_url && data.profile_url.startsWith('https://')) {
+          paragraph.append(' ');
+          const link = document.createElement('a');
+          link.href = data.profile_url;
+          link.target = '_blank';
+          link.rel = 'noopener';
+          link.textContent = 'Open on Geni';
+          paragraph.append(link);
+        }
+        profileElement.append(paragraph);
+      }
+
+      // Make a plain HTTP GET with fetch and read the answer as JSON.
+      // The token goes either in an Authorization header, which Geni's
+      // documentation recommends, or in the access_token parameter.
+      async function geniFetch(url, useHeader, label) {
+        const token = requireToken();
+        if (!token) {
+          return undefined;
+        }
+        const options = {};
+        if (useHeader) {
+          options.headers = { Authorization: 'Bearer ' + token.accessToken };
+          showRequest(
+            'fetch GET ' +
+              url +
+              '\nAuthorization: Bearer <token>' +
+              (label ? '\n' + label : ''),
+          );
+        } else {
+          showRequest(
+            'fetch GET ' +
+              url +
+              '?access_token=<token>' +
+              (label ? '\n' + label : ''),
+          );
+          url += '?' + new URLSearchParams({ access_token: token.accessToken });
+        }
+        const started = Date.now();
+        try {
+          const answer = await fetch(url, options);
+          const headers = [
+            'HTTP ' + answer.status + ' ' + answer.statusText,
+            ...[...answer.headers].map(([key, value]) => key + ': ' + value),
+          ].join('\n');
+          const text = await answer.text();
+          let data;
+          try {
+            data = JSON.parse(text);
+          } catch {
+            data = text;
+          }
+          showAnswer(started, data, headers);
+          return data;
+        } catch (error) {
+          answerElement.textContent =
+            'fetch failed after ' +
+            (Date.now() - started) +
+            ' ms: ' +
+            error +
+            '\nThe browser gives no details to the page when CORS blocks ' +
+            'a request; see the browser console for the reason.';
+          return undefined;
+        }
+      }
+
+      function useHeader() {
+        return document.getElementById('use-header').checked;
+      }
+
+      document
+        .getElementById('get-profile')
+        .addEventListener('click', () => geniFetch(profileUrl, useHeader()));
+      document
+        .getElementById('validate')
+        .addEventListener('click', () => geniFetch(validateUrl, useHeader()));
+      document.getElementById('logout').addEventListener('click', async () => {
+        if (!storedToken()) {
+          showStatus('Already logged out.');
+          return;
+        }
+        // Always use the query parameter here: a GET without custom
+        // headers needs no CORS preflight, so Geni gets the request even
+        // if the browser hides the answer from this page.
+        await geniFetch(invalidateUrl, false, 'Invalidates the token at Geni.');
+        sessionStorage.removeItem(tokenKey);
+        showStatus('Token removed from this tab.');
+      });
+
+      // Show the profile right away when there is a token.
+      if (storedToken()) {
+        geniFetch(profileUrl, useHeader());
+      }
+    </script>
+  </body>
+</html>
